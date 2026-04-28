@@ -34,8 +34,8 @@ void runFile(const char* filename) {
 	fseek(file, 0L, SEEK_SET);
 
 	char source[count];
-	size_t readCount = fread(source, sizeof(*source), sizeof(source)/sizeof(source[0]), file); 
 	
+	size_t readCount = fread(source, sizeof(*source), sizeof(source)/sizeof(source[0]), file); 	
 	if (readCount != count) {
 		fprintf(stderr, "Error: Unable to read the file `%s`\n", filename);
 		exit(1);
