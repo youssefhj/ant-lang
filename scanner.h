@@ -1,0 +1,48 @@
+#ifndef ANT_SCANNER_H
+#define ANT_SCANNER_H
+
+typedef enum {
+	TOKEN_PLUS, TOKEN_MINUS,
+	TOKEN_STAR, TOKEN_SLASH,
+	
+	TOKEN_EQUAL, TOKEN_EQUAL_EQUAL,
+	TOKEN_NOT, TOKEN_NOT_EQUAL,
+	TOKEN_LESS, TOKEN_LESS_EQUAL,
+	TOKEN_GREATER, TOKEN_GREATER_EQUAL,
+
+	TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN,
+	TOKEN_LEFT_BRACE, TOKEN_RIGHT_BRACE,
+	TOKEN_SEMICOLON, TOKEN_COMMA, TOKEN_DOT,
+
+	TOKEN_IDENTIFIER, TOKEN_STRING, TOKEN_NUMBER,
+
+	// Keywords
+	TOKEN_VAR, TOKEN_PRINT,
+	TOKEN_IF, TOKEN_ELSE,
+	TOKEN_WHILE, TOKEN_FOR,
+	TOKEN_FUNC, TOKEN_CLASS,
+	TOKEN_THIS, TOKEN_SUPER,
+	TOKEN_NIL, TOKEN_RETURN,
+	TOKEN_TRUE, TOKEN_FALSE,
+	TOKEN_AND, TOKEN_OR,
+
+	TOKEN_ERROR, TOKEN_EOF
+} TokenType;
+
+typedef struct {
+	TokenType type;
+	const char* start;
+	int length;
+	int line;
+} Token;
+
+typedef struct {
+	const char* current;
+	const char* start;
+	int line;
+} Scanner;
+
+void initScanner(const char* source);
+Token scanToken();
+
+#endif // ANT_SCANNER_H
