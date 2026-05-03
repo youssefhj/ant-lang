@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "vm.h"
+
 void runFile(const char* filename);
 void repl();
 
@@ -45,7 +47,7 @@ void runFile(const char* filename) {
 
 	fclose(file);
 	
-	//interpret(source);
+	interpret(source);
 }
 
 void repl() {
@@ -59,6 +61,8 @@ void repl() {
 			exit(1);
 		}
 		
-		//interpret(line);
+		interpret(line);
+
+		printf("\n");
 	}
 }
