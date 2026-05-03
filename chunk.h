@@ -1,0 +1,26 @@
+#ifndef ANT_CHUNK_H
+#define ANT_CHUNK_H
+
+#include "common.h"
+#include "value.h"
+
+typedef enum {
+	OP_CONSTANT,
+	OP_PRINT,
+	OP_RETURN	
+} OpCode;
+
+typedef struct {
+	int capacity;
+	int count;
+	uint8_t* code;
+	ValueArray constants;
+	int* lines;
+} Chunk;
+
+void initChunk(Chunk* chunk);
+void writeChunk(Chunk* chunk, uint8_t value, int line);
+int writeConstant(Chunk* chunk, Value value);
+void freeChunk(Chunk* chunk);
+
+#endif // ANT_CHUNK_H
