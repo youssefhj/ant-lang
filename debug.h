@@ -3,7 +3,7 @@
 
 #include "chunk.h"
 
-int disassembleInstruction(Chunk* chunk, int slot);
+int disassembleInstruction(Chunk* chunk, int offset);
 void disassemble(Chunk* chunk, const char* title);
 
 #endif // ANT_DEBUG_H

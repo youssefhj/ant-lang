@@ -3,17 +3,17 @@
 #include "debug.h"
 
 
-static int constantInstruction(const char* opcode, Chunk* chunk, int slot) {
-	uint8_t constant = chunk->code[slot + 1];
+static int constantInstruction(const char* opcode, Chunk* chunk, int offset) {
+	uint8_t constant = chunk->code[offset + 1];
 	printf("%-16s %4d '", opcode, constant);
 	printValue(chunk->constants.values[constant]);
 	printf("'\n");
-	return slot + 2;
+	return offset + 2;
 }
 
-static int simpleInstruction(const char* opcode, int slot) {
+static int simpleInstruction(const char* opcode, int offset) {
 	printf("%-16s\n", opcode);
-	return slot + 1;
+	return offset + 1;
 }
 
 int disassembleInstruction(Chunk* chunk, int offset) {
