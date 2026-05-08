@@ -34,6 +34,12 @@ static Value peek(int depth) {
 static InterpretResult run() {
 	#define READ_BYTE()		(*vm.ip++)
 	#define READ_CONSTANT()		(vm.chunk.constants.values[READ_BYTE()])
+	#define BINARY_OP(operator)		\
+		do {				\
+			Value b = pop();	\
+			Value a = pop();	\
+			push(a operator b);	\
+		} while (false);
 	
 	uint8_t instruction;
 	for (;;) {
@@ -48,6 +54,18 @@ static InterpretResult run() {
 		disassembleInstruction(&vm.chunk, (int)(vm.ip - vm.chunk.code));
 		#endif
 		switch (instruction = READ_BYTE()) {
+			case OP_ADD:
+				BINARY_OP(+);
+				break;
+			case OP_SUBTRACT:
+				BINARY_OP(-);
+				break;
+			case OP_MULTIPLY:
+				BINARY_OP(*);
+				break;
+			case OP_DIVIDE:
+				BINARY_OP(/);
+				break;
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
 				break;
@@ -63,6 +81,7 @@ static InterpretResult run() {
 	
 	#undef READ_BYTE
 	#undef READ_CONSTANT
+	#undef BINARY_OP
 
 }
 
