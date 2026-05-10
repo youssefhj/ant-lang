@@ -17,6 +17,10 @@ void freeVM() {
 	freeChunk(&vm.chunk);
 }
 
+//static void runtimeError(const char* error, ...) {
+
+//}
+
 static void push(Value value) {
 	vm.topStack++;
 	vm.topStack[-1] = value;
@@ -32,13 +36,20 @@ static Value peek(int depth) {
 }
 
 static InterpretResult run() {
-	#define READ_BYTE()		(*vm.ip++)
-	#define READ_CONSTANT()		(vm.chunk.constants.values[READ_BYTE()])
-	#define BINARY_OP(operator)		\
-		do {				\
-			Value b = pop();	\
-			Value a = pop();	\
-			push(a operator b);	\
+	#define READ_BYTE()             (*vm.ip++)
+	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
+	#define BINARY_OP(operator)                                           \
+		do {                                                          \
+			Value b = pop();                                      \
+			Value a = pop();                                      \
+			                                                      \
+			if (!IS_NUMBER(a) || !IS_NUMBER(b)) {                 \
+				return INTERPRET_RUNTIME_ERROR;               \
+			}                                                     \
+                                                                              \
+			double result = AS_NUMBER(a) operator AS_NUMBER(b);   \
+                                                                              \
+			push(NUMBER_VAL(result));                             \
 		} while (false);
 	
 	uint8_t instruction;
