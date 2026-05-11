@@ -39,6 +39,7 @@ typedef struct {
 static void binary();
 static void number();
 static void literal();
+static void grouping();
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -53,7 +54,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_LESS_EQUAL]      = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_GREATER]         = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_GREATER_EQUAL]   = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_LEFT_PAREN]      = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_LEFT_PAREN]      = {grouping,    NULL,          PREC_NONE},
 	[TOKEN_RIGHT_PAREN]     = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_LEFT_BRACE]      = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_RIGHT_BRACE]     = {NULL,        NULL,          PREC_NONE},
@@ -227,19 +228,29 @@ static void literal() {
 	}
 }
 
-static void expStmt() {
+static void grouping() {
+	expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')'");
+}
+
+static void exprStmt() {
 	expression();
 	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
 }
 
+static void statement() {
+	exprStmt();
+}
+
 static void declaration() {
-	expStmt();
+	statement();
 }
 
 /*
  * program        -> declaration* EOF
- * declaration    -> expStmt
- * expStmt        -> expresion ';'
+ * declaration    -> statement
+ * statement      -> exprStmt
+ * exprStmt       -> expression ';'
  * expression     -> logic_or
  * logic_or       -> logic_and ('or' logic_and)*
  * logic_and      -> equality ('and' equality)*
