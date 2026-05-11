@@ -40,6 +40,7 @@ typedef struct {
 void initValueArray(ValueArray* array);
 int writeValueArray(ValueArray* array, Value value);
 void printValue(Value value);
+bool valuesEqual(Value a, Value b);
 void freeValueArray(ValueArray* array);
 
 #endif // ANT_VALUE_H
