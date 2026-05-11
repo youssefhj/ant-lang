@@ -39,18 +39,18 @@ static InterpretResult run() {
 	#define READ_BYTE()             (*vm.ip++)
 	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
 	#define BINARY_OP(operator)                                           \
-		do {                                                          \
-			Value b = pop();                                      \
-			Value a = pop();                                      \
-			                                                      \
-			if (!IS_NUMBER(a) || !IS_NUMBER(b)) {                 \
-				return INTERPRET_RUNTIME_ERROR;               \
-			}                                                     \
+                do {                                                          \
+                        Value b = pop();                                      \
+                        Value a = pop();                                      \
                                                                               \
-			double result = AS_NUMBER(a) operator AS_NUMBER(b);   \
+                        if (!IS_NUMBER(a) || !IS_NUMBER(b)) {                 \
+                                return INTERPRET_RUNTIME_ERROR;               \
+                        }                                                     \
                                                                               \
-			push(NUMBER_VAL(result));                             \
-		} while (false);
+                        double result = AS_NUMBER(a) operator AS_NUMBER(b);   \
+                                                                              \
+                        push(NUMBER_VAL(result));                             \
+                } while (false);
 	
 	uint8_t instruction;
 	for (;;) {
@@ -76,6 +76,15 @@ static InterpretResult run() {
 				break;
 			case OP_DIVIDE:
 				BINARY_OP(/);
+				break;
+			case OP_TRUE:
+				push(BOOL_VAL(true));
+				break;
+			case OP_FALSE:
+				push(BOOL_VAL(false));
+				break;
+			case OP_NIL:
+				push(NIL_VAL);
 				break;
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
