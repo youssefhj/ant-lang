@@ -38,7 +38,7 @@ static Value peek(int depth) {
 static InterpretResult run() {
 	#define READ_BYTE()             (*vm.ip++)
 	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
-	#define BINARY_OP(operator)                                           \
+        #define BINARY_OP(operator)                                           \
                 do {                                                          \
                         Value b = pop();                                      \
                         Value a = pop();                                      \
@@ -85,6 +85,12 @@ static InterpretResult run() {
 				break;
 			case OP_NIL:
 				push(NIL_VAL);
+				break;
+			case OP_EQUAL:
+				push(BOOL_VAL(valuesEqual(pop(), pop())));
+				break;
+			case OP_NOT:
+				push(BOOL_VAL(!AS_BOOL(pop())));
 				break;
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
