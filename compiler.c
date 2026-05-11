@@ -38,6 +38,7 @@ typedef struct {
 
 static void binary();
 static void number();
+static void literal();
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -68,14 +69,14 @@ PrecedenceRule rules[] = {
 	[TOKEN_ELSE]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_WHILE]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_FOR]             = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_FUNC]            = {NULL, 	NULL,          PREC_NONE},
+	[TOKEN_FUNC]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_CLASS]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_THIS]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_SUPER]           = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_NIL]             = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_NIL]             = {literal,     NULL,          PREC_NONE},
 	[TOKEN_RETURN]          = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_TRUE]            = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_FALSE]           = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_TRUE]            = {literal,     NULL,          PREC_NONE},
+	[TOKEN_FALSE]           = {literal,     NULL,          PREC_NONE},
 	[TOKEN_AND]             = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_OR]              = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_ERROR]           = {NULL,        NULL,          PREC_NONE},
@@ -213,6 +214,17 @@ static void binary() {
 static void number() {
 	double number = strtod(parser.previous.start, NULL);
 	emitConstant(makeConstant(NUMBER_VAL(number)));
+}
+
+static void literal() {
+	switch (parser.previous.type) {
+		case TOKEN_TRUE: emitByte(OP_TRUE); break;
+		case TOKEN_FALSE: emitByte(OP_FALSE); break;
+		case TOKEN_NIL:	emitByte(OP_NIL); break;
+		default:
+			// Unreachable
+			return;
+	}
 }
 
 static void expStmt() {
