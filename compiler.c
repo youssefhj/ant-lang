@@ -36,7 +36,6 @@ typedef struct {
 	bool hadError;
 } Parser;
 
-static void equality();
 static void binary();
 static void grouping();
 static void number();
@@ -48,9 +47,9 @@ PrecedenceRule rules[] = {
 	[TOKEN_STAR]            = {NULL,        binary,        PREC_FACTOR},
 	[TOKEN_SLASH]           = {NULL,        binary,        PREC_FACTOR},
 	[TOKEN_EQUAL]           = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_EQUAL_EQUAL]     = {NULL,        equality,      PREC_EQUALITY},
+	[TOKEN_EQUAL_EQUAL]     = {NULL,        binary,        PREC_EQUALITY},
 	[TOKEN_NOT]             = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_NOT_EQUAL]       = {NULL,        equality,      PREC_EQUALITY},
+	[TOKEN_NOT_EQUAL]       = {NULL,        binary,        PREC_EQUALITY},
 	[TOKEN_LESS]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_LESS_EQUAL]      = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_GREATER]         = {NULL,        NULL,          PREC_NONE},
@@ -198,19 +197,6 @@ static void expression() {
 	parsePrecedence(PREC_ASSIGNEMENT);
 }
 
-static void equality() {
-	TokenType equalType = parser.previous.type;
-
-	Precedence precedence = getPrecedenceRule(equalType)->precedence;
-	parsePrecedence((Precedence)(precedence + 1));
-
-	switch (equalType) {
-		case TOKEN_EQUAL_EQUAL: emitByte(OP_EQUAL); break;
-		case TOKEN_NOT_EQUAL: emitBytes(OP_EQUAL, OP_NOT); break;
-	}
-
-}
-
 static void binary() {
 	TokenType operatorType = parser.previous.type;
 
@@ -222,6 +208,11 @@ static void binary() {
 		case TOKEN_MINUS: emitByte(OP_SUBTRACT); break;
 		case TOKEN_STAR: emitByte(OP_MULTIPLY); break;
 		case TOKEN_SLASH: emitByte(OP_DIVIDE); break;
+		case TOKEN_EQUAL_EQUAL: emitByte(OP_EQUAL); break;
+		case TOKEN_NOT_EQUAL: emitBytes(OP_EQUAL, OP_NOT); break;
+		default:
+		        // Unreachable
+			return;
 	}
 }
 
