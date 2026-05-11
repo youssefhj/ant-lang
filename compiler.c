@@ -103,7 +103,6 @@ static void errorAt(Token* token, const char* message) {
 	fprintf(stderr, ": %s.\n", message);
 }
 
-
 static void errorAtCurrent(const char* message) {
 	errorAt(&parser.current, message);
 }
