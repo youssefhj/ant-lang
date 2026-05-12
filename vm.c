@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "vm.h"
 #include "common.h"
@@ -17,9 +18,16 @@ void freeVM() {
 	freeChunk(&vm.chunk);
 }
 
-//static void runtimeError(const char* error, ...) {
-
-//}
+static void runtimeError(const char* format, ...) {
+	va_list args;
+	size_t instruction = vm.ip - vm.chunk.code - 1;
+	
+	va_start(args, format);
+	fprintf(stderr, "[line %d] Error: ", vm.chunk.lines[instruction]);
+	vfprintf(stderr, format, args);
+	va_end(args);
+	fputs(".\n", stderr);
+}
 
 static void push(Value value) {
 	vm.topStack++;
@@ -45,6 +53,7 @@ static InterpretResult run() {
         #define BINARY_OP(valueType, operator)                                \
                 do {                                                          \
                         if (!IS_NUMBER(peek(1)) || !IS_NUMBER(peek(0))) {     \
+                                runtimeError("Operands must be numbers");     \
                                 return INTERPRET_RUNTIME_ERROR;               \
                         }                                                     \
                                                                               \
@@ -99,6 +108,13 @@ static InterpretResult run() {
 				break;
 			case OP_GREATER:
 				BINARY_OP(BOOL_VAL, >);
+				break;
+			case OP_NEGATE:
+				if (!IS_NUMBER(peek(0))) {
+					runtimeError("Operand must be number");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				push(NUMBER_VAL(-AS_NUMBER(pop())));
 				break;
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
