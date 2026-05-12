@@ -35,21 +35,23 @@ static Value peek(int depth) {
 	return vm.topStack[-depth - 1];
 }
 
+static bool isFalsey(Value value) {
+	return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
 static InterpretResult run() {
 	#define READ_BYTE()             (*vm.ip++)
 	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
-        #define BINARY_OP(operator)                                           \
+        #define BINARY_OP(valueType, operator)                                \
                 do {                                                          \
-                        Value b = pop();                                      \
-                        Value a = pop();                                      \
-                                                                              \
-                        if (!IS_NUMBER(a) || !IS_NUMBER(b)) {                 \
+                        if (!IS_NUMBER(peek(1)) || !IS_NUMBER(peek(0))) {     \
                                 return INTERPRET_RUNTIME_ERROR;               \
                         }                                                     \
                                                                               \
-                        double result = AS_NUMBER(a) operator AS_NUMBER(b);   \
+                        double b = AS_NUMBER(pop());                          \
+                        double a = AS_NUMBER(pop());                          \
                                                                               \
-                        push(NUMBER_VAL(result));                             \
+                        push(valueType(a operator b));                        \
                 } while (false);
 	
 	uint8_t instruction;
@@ -66,16 +68,16 @@ static InterpretResult run() {
 		#endif
 		switch (instruction = READ_BYTE()) {
 			case OP_ADD:
-				BINARY_OP(+);
+				BINARY_OP(NUMBER_VAL, +);
 				break;
 			case OP_SUBTRACT:
-				BINARY_OP(-);
+				BINARY_OP(NUMBER_VAL, -);
 				break;
 			case OP_MULTIPLY:
-				BINARY_OP(*);
+				BINARY_OP(NUMBER_VAL, *);
 				break;
 			case OP_DIVIDE:
-				BINARY_OP(/);
+				BINARY_OP(NUMBER_VAL, /);
 				break;
 			case OP_TRUE:
 				push(BOOL_VAL(true));
@@ -90,7 +92,13 @@ static InterpretResult run() {
 				push(BOOL_VAL(valuesEqual(pop(), pop())));
 				break;
 			case OP_NOT:
-				push(BOOL_VAL(!AS_BOOL(pop())));
+				push(BOOL_VAL(isFalsey(pop())));
+				break;
+			case OP_LESS:
+				BINARY_OP(BOOL_VAL, <);
+				break;
+			case OP_GREATER:
+				BINARY_OP(BOOL_VAL, >);
 				break;
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
