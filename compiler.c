@@ -37,18 +37,19 @@ typedef struct {
 } Parser;
 
 static void binary();
+static void unary();
 static void grouping();
 static void number();
 static void literal();
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
-	[TOKEN_MINUS]           = {NULL,        binary,        PREC_TERM},
+	[TOKEN_MINUS]           = {unary,       binary,        PREC_TERM},
 	[TOKEN_STAR]            = {NULL,        binary,        PREC_FACTOR},
 	[TOKEN_SLASH]           = {NULL,        binary,        PREC_FACTOR},
 	[TOKEN_EQUAL]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_EQUAL_EQUAL]     = {NULL,        binary,        PREC_EQUALITY},
-	[TOKEN_NOT]             = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_NOT]             = {unary,       NULL,          PREC_NONE},
 	[TOKEN_NOT_EQUAL]       = {NULL,        binary,        PREC_EQUALITY},
 	[TOKEN_LESS]            = {NULL,        binary,        PREC_COMPARISON},
 	[TOKEN_LESS_EQUAL]      = {NULL,        binary,        PREC_COMPARISON},
@@ -214,6 +215,20 @@ static void binary() {
 		case TOKEN_LESS_EQUAL: emitBytes(OP_GREATER, OP_NOT); break;
 		case TOKEN_GREATER: emitByte(OP_GREATER); break;
 		case TOKEN_GREATER_EQUAL: emitBytes(OP_LESS, OP_NOT); break;
+		default:
+		        // Unreachable
+			return;
+	}
+}
+
+static void unary() {
+	TokenType operatorType = parser.previous.type;
+
+	parsePrecedence(PREC_UNARY);
+
+	switch (operatorType) {
+		case TOKEN_NOT: emitByte(OP_NOT); break;
+		case TOKEN_MINUS: emitByte(OP_NEGATE); break;
 		default:
 		        // Unreachable
 			return;
