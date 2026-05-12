@@ -14,6 +14,8 @@ typedef enum {
 	OP_NIL,
 	OP_EQUAL,
 	OP_NOT,
+	OP_LESS,
+	OP_GREATER,
 	OP_CONSTANT,
 	OP_PRINT,
 	OP_RETURN	
