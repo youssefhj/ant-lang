@@ -256,13 +256,23 @@ static void literal() {
 	}
 }
 
+static void printStmt() {
+	expression();
+	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
+	emitByte(OP_PRINT);
+}
+
 static void exprStmt() {
 	expression();
 	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
 }
 
 static void statement() {
-	exprStmt();
+	if (match(TOKEN_PRINT)) {
+		printStmt();	
+	} else {
+		exprStmt();
+	}
 }
 
 static void declaration() {
@@ -272,7 +282,8 @@ static void declaration() {
 /*
  * program        -> declaration* EOF
  * declaration    -> statement
- * statement      -> exprStmt
+ * statement      -> printStmt | exprStmt
+ * printStmt      -> 'print' expression ';'
  * exprStmt       -> expression ';'
  * expression     -> logic_or
  * logic_or       -> logic_and ('or' logic_and)*
