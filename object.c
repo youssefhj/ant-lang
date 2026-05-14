@@ -2,13 +2,19 @@
 #include <string.h>
 
 #include "object.h"
+#include "vm.h"
 #include "memory.h"
 
 #define ALLOCATE_OBJ(type, objType)          ((type*)allocateObject(sizeof(type), objType))
 
-Obj* allocateObject(size_t size, ObjType type) {
+extern VM vm;
+
+static Obj* allocateObject(size_t size, ObjType type) {
 	Obj* object = (Obj*)reallocate(NULL, size);
 	object->type = type;
+	
+	object->next = vm.objects;
+	vm.objects = object;
 
 	return object;
 }
