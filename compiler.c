@@ -5,6 +5,7 @@
 #include "common.h"
 #include "scanner.h"
 #include "chunk.h"
+#include "object.h"
 #include "debug.h"
 
 
@@ -41,6 +42,7 @@ static void unary();
 static void grouping();
 static void number();
 static void literal();
+static void string();
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -63,7 +65,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_COMMA]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_DOT]             = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_IDENTIFIER]      = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_STRING]          = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_STRING]          = {string,      NULL,          PREC_NONE},
 	[TOKEN_NUMBER]          = {number,      NULL,          PREC_NONE},
 	[TOKEN_VAR]             = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_PRINT]           = {NULL,        NULL,          PREC_NONE},
@@ -254,6 +256,10 @@ static void literal() {
 			// Unreachable
 			return;
 	}
+}
+
+static void string() {
+	emitConstant(makeConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length - 2))));
 }
 
 static void printStmt() {
