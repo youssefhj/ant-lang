@@ -4,6 +4,7 @@
 #include "common.h"
 #include "chunk.h"
 #include "value.h"
+#include "object.h"
 
 #define STACK_MAX_SIZE 1024
 
@@ -20,6 +21,7 @@ typedef struct {
 	uint8_t* ip;
 	Value stack[STACK_MAX_SIZE];
 	Value* topStack;
+	Obj* objects;
 } VM;
 
 

@@ -15,10 +15,12 @@ void initVM() {
 	initChunk(&vm.chunk);
 	vm.ip = NULL;
 	vm.topStack = vm.stack;
+	vm.objects = NULL;
 }
 
 void freeVM() {
 	freeChunk(&vm.chunk);
+	freeObjects();
 }
 
 static void runtimeError(const char* format, ...) {
