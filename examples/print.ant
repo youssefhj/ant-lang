@@ -1,0 +1,16 @@
+// Strings (concatenation)
+print "Enjoy learning 'ant-lang'";
+print "Make" + " " + "coffee" + " ;)";
+
+// Expressions
+// Arithmetic
+print 3 + 2 * (3 / -1);
+
+// Comparison
+print 100 > 100;
+
+// Not and Equality
+print !true == true;
+
+// nil value
+print nil;
