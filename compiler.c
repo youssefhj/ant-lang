@@ -23,7 +23,7 @@ typedef enum {
 	PREC_PRIMARY
 } Precedence;
 
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(bool);
 
 typedef struct {
 	ParseFn prefixFn;
@@ -37,12 +37,13 @@ typedef struct {
 	bool hadError;
 } Parser;
 
-static void binary();
-static void unary();
-static void grouping();
-static void number();
-static void literal();
-static void string();
+static void binary(bool canAssign);
+static void unary(bool canAssign);
+static void grouping(bool canAssign);
+static void number(bool canAssign);
+static void literal(bool canAssign);
+static void string(bool canAssign);
+static void variable(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -64,7 +65,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_SEMICOLON]       = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_COMMA]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_DOT]             = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_IDENTIFIER]      = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_IDENTIFIER]      = {variable,    NULL,          PREC_NONE},
 	[TOKEN_STRING]          = {string,      NULL,          PREC_NONE},
 	[TOKEN_NUMBER]          = {number,      NULL,          PREC_NONE},
 	[TOKEN_VAR]             = {NULL,        NULL,          PREC_NONE},
@@ -173,6 +174,10 @@ static uint8_t makeConstant(Value value) {
 	return (uint8_t)constant;
 }
 
+static uint8_t makeIdentifierConstant(Token token) {
+	return makeConstant(OBJ_VAL(copyString(token.start, token.length)));
+}
+
 static PrecedenceRule* getPrecedenceRule(TokenType type) {
 	return &rules[type];
 }
@@ -185,14 +190,20 @@ static void parsePrecedence(Precedence precedence) {
 		error("Expecting expression");
 		return;
 	}
-
-	prefix();
+	
+	bool canAssign = precedence <= PREC_ASSIGNEMENT;
+	prefix(canAssign); 
 
 	while (precedence <= getPrecedenceRule(parser.current.type)->precedence) {
 		advance();
 		ParseFn infix = getPrecedenceRule(parser.previous.type)->infixFn;
 
-		infix();
+		infix(canAssign);
+	}
+
+	if (canAssign && match(TOKEN_EQUAL)) {
+		error("Invalid assignement target");
+		return;
 	}
 }
 
@@ -200,7 +211,7 @@ static void expression() {
 	parsePrecedence(PREC_ASSIGNEMENT);
 }
 
-static void binary() {
+static void binary(bool canAssign) {
 	TokenType operatorType = parser.previous.type;
 
 	Precedence precedence = getPrecedenceRule(operatorType)->precedence;
@@ -223,7 +234,7 @@ static void binary() {
 	}
 }
 
-static void unary() {
+static void unary(bool canAssign) {
 	TokenType operatorType = parser.previous.type;
 
 	parsePrecedence(PREC_UNARY);
@@ -237,17 +248,17 @@ static void unary() {
 	}
 }
 
-static void grouping() {
+static void grouping(bool canAssign) {
 	expression();
 	consume(TOKEN_RIGHT_PAREN, "Expect ')'");
 }
 
-static void number() {
+static void number(bool canAssign) {
 	double number = strtod(parser.previous.start, NULL);
 	emitConstant(makeConstant(NUMBER_VAL(number)));
 }
 
-static void literal() {
+static void literal(bool canAssign) {
 	switch (parser.previous.type) {
 		case TOKEN_TRUE: emitByte(OP_TRUE); break;
 		case TOKEN_FALSE: emitByte(OP_FALSE); break;
@@ -258,8 +269,43 @@ static void literal() {
 	}
 }
 
-static void string() {
+static void string(bool canAssign) {
 	emitConstant(makeConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length - 2))));
+}
+
+static void variable(bool canAssign) {
+	uint8_t constant = makeIdentifierConstant(parser.previous);
+
+	uint8_t op;
+	if (canAssign && match(TOKEN_EQUAL)) {
+		expression();
+		op = OP_SET_GLOBAL;
+	} else {
+		op = OP_GET_GLOBAL;
+	}
+
+	emitBytes(op, constant);
+}
+
+static uint8_t parseVariable(Token token) {
+	consume(TOKEN_IDENTIFIER, "Expect variable name");
+	return makeIdentifierConstant(parser.previous);
+}
+
+static void defineVariable(uint8_t global) {
+	emitBytes(OP_DEFINE_GLOBAL, global);
+}
+
+static void varDeclaration() {
+	uint8_t global = parseVariable(parser.previous);
+	if (match(TOKEN_EQUAL)) {
+		expression();
+	} else {
+		emitByte(OP_NIL);		
+	}
+	
+	defineVariable(global);
+	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
 }
 
 static void printStmt() {
@@ -282,16 +328,22 @@ static void statement() {
 }
 
 static void declaration() {
-	statement();
+	if (match(TOKEN_VAR)) {
+		varDeclaration();
+	} else {
+		statement();
+	}
 }
 
 /*
  * program        -> declaration* EOF
- * declaration    -> statement
+ * declaration    -> varDeclaration | statement
+ * varDeclaration -> 'var' IDENTIFIER '=' expression ';'
  * statement      -> printStmt | exprStmt
  * printStmt      -> 'print' expression ';'
  * exprStmt       -> expression ';'
- * expression     -> logic_or
+ * expression     -> assignement
+ * assignement    -> IDENTIFIER '=' assignement | logic_or
  * logic_or       -> logic_and ('or' logic_and)*
  * logic_and      -> equality ('and' equality)*
  * equality       -> comparison (('==' | '!=') comparison)*
