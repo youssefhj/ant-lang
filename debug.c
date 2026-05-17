@@ -11,6 +11,12 @@ static int constantInstruction(const char* opcode, Chunk* chunk, int offset) {
 	return offset + 2;
 }
 
+static int byteInstruction(const char* opcode, Chunk* chunk, int offset) {
+	uint8_t slot = chunk->code[offset + 1];
+	printf("%-16s %4d\n", opcode, slot);
+	return offset + 2;
+}
+
 static int simpleInstruction(const char* opcode, int offset) {
 	printf("%-16s\n", opcode);
 	return offset + 1;
@@ -52,6 +58,12 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			return simpleInstruction("OP_GREATER", offset);
 		case OP_NEGATE:
 			return simpleInstruction("OP_NEGATE", offset);
+		case OP_DEFINE_GLOBAL:
+			return constantInstruction("OP_DEFINE_GLOBAL", chunk, offset);
+		case OP_GET_GLOBAL:
+			return byteInstruction("OP_GET_GLOBAL", chunk, offset);
+		case OP_SET_GLOBAL:
+			return byteInstruction("OP_SET_GLOBAL", chunk, offset);
 		case OP_CONSTANT:
 			return constantInstruction("OP_CONSTANT", chunk, offset);
 		case OP_PRINT:
