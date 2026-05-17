@@ -1,6 +1,7 @@
 #ifndef ANT_OBJECT_H
 #define ANT_OBJECT_H
 
+#include "common.h"
 #include "value.h"
 
 #define OBJ_TYPE(value)           (AS_OBJ(value)->type)
@@ -23,6 +24,7 @@ typedef struct {
 	Obj obj;
 	char* chars;
 	int length;
+	uint32_t hash;
 } ObjString;
 
 ObjString* takeString(char* chars, int length);
