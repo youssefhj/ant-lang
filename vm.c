@@ -16,6 +16,8 @@ void initVM() {
 	vm.ip = NULL;
 	vm.topStack = vm.stack;
 	vm.objects = NULL;
+	initTable(&vm.globals);
+	initTable(&vm.strings);
 }
 
 void freeVM() {
@@ -63,7 +65,6 @@ static void concatenate() {
 	memcpy(chars + stringA->length, stringB->chars, stringB->length);
 
 	chars[totalLength] = '\0';
-	
 	ObjString* concatenatedString = takeString(chars, totalLength);
 
 	pop();
@@ -74,6 +75,7 @@ static void concatenate() {
 static InterpretResult run() {
 	#define READ_BYTE()             (*vm.ip++)
 	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
+	#define READ_STRING()           (AS_STRING(READ_CONSTANT()))
         #define BINARY_OP(valueType, operator)                                \
                 do {                                                          \
                         if (!IS_NUMBER(peek(1)) || !IS_NUMBER(peek(0))) {     \
@@ -148,6 +150,32 @@ static InterpretResult run() {
 				}
 				push(NUMBER_VAL(-AS_NUMBER(pop())));
 				break;
+			case OP_DEFINE_GLOBAL: {
+				tableSet(&vm.globals, READ_STRING(), peek(0));
+				pop();
+				break;
+			}
+			case OP_GET_GLOBAL: {
+				Value value;
+				ObjString* variable = READ_STRING();
+				if (!tableGet(&vm.globals, variable, &value)) {
+					runtimeError("Undefined variable '%s'", variable->chars);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+
+				push(value);
+				break;
+			}
+			case OP_SET_GLOBAL: {
+				ObjString* variable = READ_STRING();
+				if (tableSet(&vm.globals, variable, peek(0))) {
+					tableDelete(&vm.globals, variable);
+					runtimeError("Undeclared variable '%s'", variable->chars);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				pop();
+				break;
+			}
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
 				break;
@@ -164,6 +192,7 @@ static InterpretResult run() {
 	
 	#undef READ_BYTE
 	#undef READ_CONSTANT
+	#undef READ_STRING
 	#undef BINARY_OP
 
 }
