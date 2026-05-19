@@ -1,0 +1,9 @@
+// Variable Declaration
+var name = "foo";
+
+print "My old name is '" + name + "'";
+
+// Assignment
+name = "bar";
+
+print "My new name is '" + name + "'";
