@@ -150,6 +150,9 @@ static InterpretResult run() {
 				}
 				push(NUMBER_VAL(-AS_NUMBER(pop())));
 				break;
+			case OP_POP:
+				pop();
+				break;
 			case OP_DEFINE_GLOBAL: {
 				tableSet(&vm.globals, READ_STRING(), peek(0));
 				pop();
@@ -173,7 +176,6 @@ static InterpretResult run() {
 					runtimeError("Undeclared variable '%s'", variable->chars);
 					return INTERPRET_RUNTIME_ERROR;
 				}
-				pop();
 				break;
 			}
 			case OP_CONSTANT:
