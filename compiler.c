@@ -11,7 +11,7 @@
 
 typedef enum {
 	PREC_NONE,
-	PREC_ASSIGNEMENT, // =
+	PREC_ASSIGNMENT,  // =
 	PREC_OR,          // or
 	PREC_AND,         // and
 	PREC_EQUALITY,    // == !=
@@ -191,7 +191,7 @@ static void parsePrecedence(Precedence precedence) {
 		return;
 	}
 	
-	bool canAssign = precedence <= PREC_ASSIGNEMENT;
+	bool canAssign = precedence <= PREC_ASSIGNMENT;
 	prefix(canAssign); 
 
 	while (precedence <= getPrecedenceRule(parser.current.type)->precedence) {
@@ -208,7 +208,7 @@ static void parsePrecedence(Precedence precedence) {
 }
 
 static void expression() {
-	parsePrecedence(PREC_ASSIGNEMENT);
+	parsePrecedence(PREC_ASSIGNMENT);
 }
 
 static void binary(bool canAssign) {
@@ -289,7 +289,7 @@ static void variable(bool canAssign) {
 
 static uint8_t parseVariable(Token token) {
 	consume(TOKEN_IDENTIFIER, "Expect variable name");
-	return makeIdentifierConstant(parser.previous);
+	return makeIdentifierConstant(token);
 }
 
 static void defineVariable(uint8_t global) {
@@ -297,7 +297,7 @@ static void defineVariable(uint8_t global) {
 }
 
 static void varDeclaration() {
-	uint8_t global = parseVariable(parser.previous);
+	uint8_t global = parseVariable(parser.current);
 	if (match(TOKEN_EQUAL)) {
 		expression();
 	} else {
@@ -317,6 +317,7 @@ static void printStmt() {
 static void exprStmt() {
 	expression();
 	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
+	emitByte(OP_POP);
 }
 
 static void statement() {
@@ -342,8 +343,8 @@ static void declaration() {
  * statement      -> printStmt | exprStmt
  * printStmt      -> 'print' expression ';'
  * exprStmt       -> expression ';'
- * expression     -> assignement
- * assignement    -> IDENTIFIER '=' assignement | logic_or
+ * expression     -> assignment
+ * assignment     -> IDENTIFIER '=' assignment | logic_or
  * logic_or       -> logic_and ('or' logic_and)*
  * logic_and      -> equality ('and' equality)*
  * equality       -> comparison (('==' | '!=') comparison)*
