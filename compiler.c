@@ -35,6 +35,7 @@ typedef struct {
 	Token previous;
 	Token current;
 	bool hadError;
+	bool panicMode;
 } Parser;
 
 static void binary(bool canAssign);
@@ -92,7 +93,8 @@ Parser parser;
 Chunk* currentChunk = NULL;
 
 static void errorAt(Token* token, const char* message) {
-	parser.hadError = true;
+	if (parser.panicMode) return;
+	parser.panicMode = true;
 
 	fprintf(stderr, "[line %d] Error", token->line);
 	if (token->type == TOKEN_EOF) {
@@ -104,6 +106,7 @@ static void errorAt(Token* token, const char* message) {
 	}
 
 	fprintf(stderr, ": %s.\n", message);
+	parser.hadError = true;
 }
 
 static void errorAtCurrent(const char* message) {
@@ -328,11 +331,38 @@ static void statement() {
 	}
 }
 
+static void synchronize() {
+	parser.panicMode = false;
+
+	while (parser.current.type != TOKEN_EOF) {
+		
+		if (parser.previous.type == TOKEN_SEMICOLON) return;
+
+		switch (parser.current.type) {
+			case TOKEN_VAR:
+			case TOKEN_PRINT:
+			case TOKEN_IF:
+			case TOKEN_WHILE:
+			case TOKEN_FOR:
+			case TOKEN_FUNC:
+			case TOKEN_CLASS:
+			case TOKEN_RETURN:
+				return;
+		}
+
+		advance();
+	}
+}
+
 static void declaration() {
 	if (match(TOKEN_VAR)) {
 		varDeclaration();
 	} else {
 		statement();
+	}
+
+	if (parser.panicMode) {
+		synchronize();
 	}
 }
 
@@ -360,6 +390,7 @@ bool compile(const char* source, Chunk* chunk) {
 	advance();
 
 	parser.hadError = false;
+	parser.panicMode = false;
 
 	while (!match(TOKEN_EOF)) {
 		declaration();
