@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "compiler.h"
 #include "common.h"
@@ -37,6 +38,17 @@ typedef struct {
 	bool hadError;
 	bool panicMode;
 } Parser;
+
+typedef struct {
+	Token name;
+	int scopeDepth;
+} Local;
+
+typedef struct {
+	Local locals[UINT8_COUNT];
+	int localsCount;
+	int currentScope;
+} Compiler;
 
 static void binary(bool canAssign);
 static void unary(bool canAssign);
@@ -91,6 +103,7 @@ PrecedenceRule rules[] = {
 
 Parser parser;
 Chunk* currentChunk = NULL;
+Compiler* currentCompiler = NULL;
 
 static void errorAt(Token* token, const char* message) {
 	if (parser.panicMode) return;
@@ -181,6 +194,11 @@ static uint8_t makeIdentifierConstant(Token token) {
 	return makeConstant(OBJ_VAL(copyString(token.start, token.length)));
 }
 
+static bool identifierEquals(Token* id1, Token* id2) {
+	if (id1->length != id2->length) return false;
+	return memcmp(id1->start, id2->start, id1->length) == 0;
+}
+
 static PrecedenceRule* getPrecedenceRule(TokenType type) {
 	return &rules[type];
 }
@@ -208,6 +226,13 @@ static void parsePrecedence(Precedence precedence) {
 		error("Invalid assignement target");
 		return;
 	}
+}
+
+static void initCompiler(Compiler* compiler) {
+	compiler->localsCount = 0;
+	compiler->currentScope = 0;
+
+	currentCompiler = compiler;
 }
 
 static void expression() {
@@ -276,31 +301,101 @@ static void string(bool canAssign) {
 	emitConstant(makeConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length - 2))));
 }
 
-static void variable(bool canAssign) {
-	uint8_t constant = makeIdentifierConstant(parser.previous);
+static int resolveLocal(Token* name) {
+	if (currentCompiler->currentScope <= 0) return -1;
 
-	uint8_t op;
-	if (canAssign && match(TOKEN_EQUAL)) {
-		expression();
-		op = OP_SET_GLOBAL;
-	} else {
-		op = OP_GET_GLOBAL;
+	for (int i = currentCompiler->localsCount - 1; i >= 0; i--) {
+		Local* local = &currentCompiler->locals[i];
+
+		if (identifierEquals(&local->name, name)) {
+			if (local->scopeDepth == -1) {
+				error("Can't read local variable");
+			}
+
+			return i;
+		}
 	}
-
-	emitBytes(op, constant);
+	
+	return -1;
 }
 
-static uint8_t parseVariable(Token token) {
-	consume(TOKEN_IDENTIFIER, "Expect variable name");
-	return makeIdentifierConstant(token);
+static void variable(bool canAssign) {
+	uint8_t opSet, opGet;
+	int constant = resolveLocal(&parser.previous);
+
+	if (constant == -1) {
+		constant = makeIdentifierConstant(parser.previous);
+		
+		opSet = OP_SET_GLOBAL;
+		opGet = OP_GET_GLOBAL;
+	} else {
+		opSet = OP_SET_LOCAL;
+		opGet = OP_GET_LOCAL;
+	}
+	
+	if (canAssign && match(TOKEN_EQUAL)) {
+		expression();	
+		emitBytes(opSet, (uint8_t)constant);
+	} else {
+		emitBytes(opGet, (uint8_t)constant);
+	}
+}
+
+static void addLocal(Token name) {
+	if (currentCompiler->localsCount == UINT8_COUNT) {
+		error("Too many local variables");
+		return;
+	}
+
+	Local* local = &currentCompiler->locals[currentCompiler->localsCount++];
+	local->name = name;
+	local->scopeDepth = -1;
+}
+
+static void declareVariable() {
+	if (currentCompiler->currentScope <= 0) return;
+	
+	Token* name = &parser.previous;
+	for (int i = currentCompiler->localsCount - 1; i >= 0; i--) {
+		Local* local = &currentCompiler->locals[i];
+
+		if (local->scopeDepth != -1 && local->scopeDepth < currentCompiler->currentScope) {		
+			break;
+		} else if (identifierEquals(name, &local->name)) {
+			error("Variable has already been declared in this scope");
+			return;
+		}
+	}
+	
+	addLocal(*name);
+}
+
+static uint8_t parseVariable(const char* errorMessage) {
+	consume(TOKEN_IDENTIFIER, errorMessage);
+	
+	declareVariable();
+	if (currentCompiler->currentScope > 0) return 0;
+
+	return makeIdentifierConstant(parser.previous);
+}
+
+static void markInitialized() {
+	if (currentCompiler->currentScope <= 0) return;
+	currentCompiler->locals[currentCompiler->localsCount - 1].scopeDepth = currentCompiler->currentScope;
 }
 
 static void defineVariable(uint8_t global) {
+	if (currentCompiler->currentScope > 0) {
+		// Local variables are implicitly defined
+		markInitialized();
+		return;
+	}
+
 	emitBytes(OP_DEFINE_GLOBAL, global);
 }
 
 static void varDeclaration() {
-	uint8_t global = parseVariable(parser.current);
+	uint8_t global = parseVariable("Expect variable name");
 	if (match(TOKEN_EQUAL)) {
 		expression();
 	} else {
@@ -308,24 +403,51 @@ static void varDeclaration() {
 	}
 	
 	defineVariable(global);
-	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
+	consume(TOKEN_SEMICOLON, "Expect ';'");
 }
 
 static void printStmt() {
 	expression();
-	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
+	consume(TOKEN_SEMICOLON, "Expect ';'");
 	emitByte(OP_PRINT);
+}
+
+static void beginScope() {
+	currentCompiler->currentScope++;
+}
+
+static void declaration();
+static void block() {
+	while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+		declaration();
+	}
+
+	consume(TOKEN_RIGHT_BRACE, "Expect '}'");
+}
+
+static void endScope() {
+	currentCompiler->currentScope--;
+
+	while (currentCompiler->localsCount > 0 && 
+			currentCompiler->locals[currentCompiler->localsCount - 1].scopeDepth > currentCompiler->currentScope) {
+		currentCompiler->localsCount--;
+		emitByte(OP_POP);
+	}
 }
 
 static void exprStmt() {
 	expression();
-	consume(TOKEN_SEMICOLON, "Expect ';' at end of expression");
+	consume(TOKEN_SEMICOLON, "Expect ';'");
 	emitByte(OP_POP);
 }
 
 static void statement() {
 	if (match(TOKEN_PRINT)) {
-		printStmt();	
+		printStmt();
+	} else if (match(TOKEN_LEFT_BRACE)) {
+		beginScope();
+		block();
+		endScope();	
 	} else {
 		exprStmt();
 	}
@@ -370,9 +492,10 @@ static void declaration() {
  * program        -> declaration* EOF
  * declaration    -> varDeclaration | statement
  * varDeclaration -> 'var' IDENTIFIER '=' expression ';'
- * statement      -> printStmt | exprStmt
+ * statement      -> printStmt | exprStmt | block
  * printStmt      -> 'print' expression ';'
  * exprStmt       -> expression ';'
+ * block          -> '{' declaration* '}'
  * expression     -> assignment
  * assignment     -> IDENTIFIER '=' assignment | logic_or
  * logic_or       -> logic_and ('or' logic_and)*
@@ -391,6 +514,9 @@ bool compile(const char* source, Chunk* chunk) {
 
 	parser.hadError = false;
 	parser.panicMode = false;
+
+	Compiler compiler;
+	initCompiler(&compiler);
 
 	while (!match(TOKEN_EOF)) {
 		declaration();
