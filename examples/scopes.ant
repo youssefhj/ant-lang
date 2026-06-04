@@ -1,0 +1,14 @@
+var a = 1; // global variable
+
+{// outer-scope 1
+	var b = 2; // local variable
+
+	{// inner-scope 2
+		a = 10;
+		b = 20;
+	}
+
+	print b;
+}
+
+print a;
