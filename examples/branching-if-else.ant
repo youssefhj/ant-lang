@@ -1,0 +1,9 @@
+print "Conditional Branching";
+
+if (true and false) {
+	print "block 1";
+} else if (false or true) {
+	print "block 2";
+} else {
+	print "block 3";
+}
