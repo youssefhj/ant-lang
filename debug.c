@@ -22,6 +22,12 @@ static int simpleInstruction(const char* opcode, int offset) {
 	return offset + 1;
 }
 
+static int jumpInstruction(const char* opcode, Chunk* chunk, int offset) {
+	uint16_t jumpOffset = (uint16_t) (chunk->code[offset + 1] << 8 | chunk->code[offset + 2]);
+	printf("%-16s %4d -> %d\n", opcode, offset, offset + jumpOffset + 3);
+	return offset + 3;
+}
+
 int disassembleInstruction(Chunk* chunk, int offset) {
 	printf("%04d  ", offset);
 	
@@ -70,6 +76,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
 			return byteInstruction("OP_GET_LOCAL", chunk, offset);
 		case OP_SET_LOCAL:
 			return byteInstruction("OP_SET_LOCAL", chunk, offset);
+		case OP_JUMP_IF_FALSE:
+			return jumpInstruction("OP_JUMP_IF_FALSE", chunk, offset);
+		case OP_JUMP:
+			return jumpInstruction("OP_JUMP", chunk, offset);
 		case OP_CONSTANT:
 			return constantInstruction("OP_CONSTANT", chunk, offset);
 		case OP_PRINT:
