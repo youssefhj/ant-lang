@@ -57,6 +57,8 @@ static void number(bool canAssign);
 static void literal(bool canAssign);
 static void string(bool canAssign);
 static void variable(bool canAssign);
+static void and_(bool canAssign);
+static void or_(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -95,8 +97,8 @@ PrecedenceRule rules[] = {
 	[TOKEN_RETURN]          = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_TRUE]            = {literal,     NULL,          PREC_NONE},
 	[TOKEN_FALSE]           = {literal,     NULL,          PREC_NONE},
-	[TOKEN_AND]             = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_OR]              = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_AND]             = {NULL,        and_,          PREC_AND},
+	[TOKEN_OR]              = {NULL,        or_,          PREC_OR},
 	[TOKEN_ERROR]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_EOF]             = {NULL,        NULL,          PREC_NONE}
 };
@@ -301,6 +303,9 @@ static void string(bool canAssign) {
 	emitConstant(makeConstant(OBJ_VAL(copyString(parser.previous.start + 1, parser.previous.length - 2))));
 }
 
+static void statement();
+static void declaration();
+
 static int resolveLocal(Token* name) {
 	if (currentCompiler->currentScope <= 0) return -1;
 
@@ -416,7 +421,6 @@ static void beginScope() {
 	currentCompiler->currentScope++;
 }
 
-static void declaration();
 static void block() {
 	while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
 		declaration();
@@ -435,6 +439,71 @@ static void endScope() {
 	}
 }
 
+static int emitJump(uint8_t byte) {
+	emitByte(byte);
+	emitBytes((uint8_t)0xff, (uint8_t)0xff);
+
+	return getCurrentChunk()->count - 2;
+}
+
+static void backPatching(int offset) {
+	int jumpOffset = getCurrentChunk()->count - offset - 2;
+
+	if (jumpOffset > UINT16_MAX) {
+		error("Too many code to jump over");
+		return;
+	}
+
+	getCurrentChunk()->code[offset] = (jumpOffset >> 8) & 0xff;
+	getCurrentChunk()->code[offset + 1] = jumpOffset & 0xff;
+}
+
+static void and_(bool canAssign) {
+	// short circuit
+	int jumpOffset = emitJump(OP_JUMP_IF_FALSE);
+	
+	emitByte(OP_POP);
+
+	parsePrecedence(PREC_AND + 1);
+	
+	backPatching(jumpOffset);
+}
+
+static void or_(bool canAssign) {
+	// short circuit
+	int jumpIfFalseOffset = emitJump(OP_JUMP_IF_FALSE);
+	int jumpOffset = emitJump(OP_JUMP);
+
+	backPatching(jumpIfFalseOffset);
+	emitByte(OP_POP);	
+	
+	parsePrecedence(PREC_OR + 1);
+
+	backPatching(jumpOffset);
+}
+
+static void ifStmt() {
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after if statement");
+	expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after if condition");
+
+	int ifOffset = emitJump(OP_JUMP_IF_FALSE);
+	emitByte(OP_POP);
+
+	// if block
+	statement();	
+
+	int elseOffset = emitJump(OP_JUMP);
+	
+	backPatching(ifOffset);
+	emitByte(OP_POP);
+
+	// else block
+	if (match(TOKEN_ELSE)) statement();
+
+	backPatching(elseOffset);
+}
+
 static void exprStmt() {
 	expression();
 	consume(TOKEN_SEMICOLON, "Expect ';'");
@@ -447,7 +516,9 @@ static void statement() {
 	} else if (match(TOKEN_LEFT_BRACE)) {
 		beginScope();
 		block();
-		endScope();	
+		endScope();
+	} else if (match(TOKEN_IF)) {
+		ifStmt();	
 	} else {
 		exprStmt();
 	}
@@ -491,21 +562,22 @@ static void declaration() {
 /*
  * program        -> declaration* EOF
  * declaration    -> varDeclaration | statement
- * varDeclaration -> 'var' IDENTIFIER '=' expression ';'
- * statement      -> printStmt | exprStmt | block
- * printStmt      -> 'print' expression ';'
- * exprStmt       -> expression ';'
- * block          -> '{' declaration* '}'
+ * varDeclaration -> "var" IDENTIFIER "=" expression ";"
+ * statement      -> printStmt | exprStmt | block | ifStmt
+ * ifStmt         -> "if" "(" expression ")" statement ("else" statement)?
+ * printStmt      -> "print" expression ";"
+ * exprStmt       -> expression ";"
+ * block          -> "{" declaration* "}"
  * expression     -> assignment
- * assignment     -> IDENTIFIER '=' assignment | logic_or
- * logic_or       -> logic_and ('or' logic_and)*
- * logic_and      -> equality ('and' equality)*
- * equality       -> comparison (('==' | '!=') comparison)*
- * comparison     -> term (('>' | '<' | '>=' | '<=') term)*
- * term           -> factor (('+' | '-') factor)*
- * factor         -> unary (('*' | '/') unary)*
- * unary          -> ('!' | '-') unary | primary
- * primary        -> 'true' | 'false' | 'nil' | IDENTIFIER | STRING | NUMBER | '(' expression ')'
+ * assignment     -> IDENTIFIER "=" assignment | logic_or
+ * logic_or       -> logic_and ("or" logic_and)*
+ * logic_and      -> equality ("and" equality)*
+ * equality       -> comparison (("==" | "!=") comparison)*
+ * comparison     -> term ((">" | "<" | ">=" | "<=") term)*
+ * term           -> factor (("+" | "-") factor)*
+ * factor         -> unary (("*" | "/") unary)*
+ * unary          -> ("!" | "-") unary | primary
+ * primary        -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
  */
 bool compile(const char* source, Chunk* chunk) {
 	initScanner(source);
