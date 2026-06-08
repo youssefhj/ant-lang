@@ -446,7 +446,7 @@ static int emitJump(uint8_t byte) {
 	return getCurrentChunk()->count - 2;
 }
 
-static void backPatching(int offset) {
+static void jumpBackPatching(int offset) {
 	int jumpOffset = getCurrentChunk()->count - offset - 2;
 
 	if (jumpOffset > UINT16_MAX) {
@@ -466,7 +466,7 @@ static void and_(bool canAssign) {
 
 	parsePrecedence(PREC_AND + 1);
 	
-	backPatching(jumpOffset);
+	jumpBackPatching(jumpOffset);
 }
 
 static void or_(bool canAssign) {
@@ -474,12 +474,12 @@ static void or_(bool canAssign) {
 	int jumpIfFalseOffset = emitJump(OP_JUMP_IF_FALSE);
 	int jumpOffset = emitJump(OP_JUMP);
 
-	backPatching(jumpIfFalseOffset);
+	jumpBackPatching(jumpIfFalseOffset);
 	emitByte(OP_POP);	
 	
 	parsePrecedence(PREC_OR + 1);
 
-	backPatching(jumpOffset);
+	jumpBackPatching(jumpOffset);
 }
 
 static void ifStmt() {
@@ -495,13 +495,44 @@ static void ifStmt() {
 
 	int elseOffset = emitJump(OP_JUMP);
 	
-	backPatching(ifOffset);
+	jumpBackPatching(ifOffset);
 	emitByte(OP_POP);
 
 	// else block
 	if (match(TOKEN_ELSE)) statement();
 
-	backPatching(elseOffset);
+	jumpBackPatching(elseOffset);
+}
+
+static void emitLoop(int loopStart) {
+	emitByte(OP_LOOP);
+
+	int offset = getCurrentChunk()->count + 2 - loopStart;
+
+	if (offset > UINT16_MAX) {
+		error("Loop body is too large");
+	}
+
+	emitByte((offset >> 8) & 0xff);
+	emitByte(offset & 0xff);
+}
+
+static void whileStmt() {
+	int loopStart = getCurrentChunk()->count;
+
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after while statement");
+	expression();
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after while condition");
+
+	int jumpOffset = emitJump(OP_JUMP_IF_FALSE);
+
+	emitByte(OP_POP);	
+	statement();	
+
+	emitLoop(loopStart);
+	
+	jumpBackPatching(jumpOffset);
+	emitByte(OP_POP);
 }
 
 static void exprStmt() {
@@ -518,7 +549,9 @@ static void statement() {
 		block();
 		endScope();
 	} else if (match(TOKEN_IF)) {
-		ifStmt();	
+		ifStmt();
+	} else if (match(TOKEN_WHILE)) {
+		whileStmt();	
 	} else {
 		exprStmt();
 	}
@@ -563,11 +596,12 @@ static void declaration() {
  * program        -> declaration* EOF
  * declaration    -> varDeclaration | statement
  * varDeclaration -> "var" IDENTIFIER "=" expression ";"
- * statement      -> printStmt | exprStmt | block | ifStmt
- * ifStmt         -> "if" "(" expression ")" statement ("else" statement)?
+ * statement      -> printStmt | exprStmt | block | ifStmt | whileStmt
  * printStmt      -> "print" expression ";"
  * exprStmt       -> expression ";"
  * block          -> "{" declaration* "}"
+ * ifStmt         -> "if" "(" expression ")" statement ("else" statement)?
+ * whileStmt      -> "while" "(" expression ")" statement
  * expression     -> assignment
  * assignment     -> IDENTIFIER "=" assignment | logic_or
  * logic_or       -> logic_and ("or" logic_and)*
