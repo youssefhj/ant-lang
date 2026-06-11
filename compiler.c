@@ -483,9 +483,9 @@ static void or_(bool canAssign) {
 }
 
 static void ifStmt() {
-	consume(TOKEN_LEFT_PAREN, "Expect '(' after if statement");
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'");
 	expression();
-	consume(TOKEN_RIGHT_PAREN, "Expect ')' after if condition");
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition");
 
 	int ifOffset = emitJump(OP_JUMP_IF_FALSE);
 	emitByte(OP_POP);
@@ -520,9 +520,9 @@ static void emitLoop(int loopStart) {
 static void whileStmt() {
 	int loopStart = getCurrentChunk()->count;
 
-	consume(TOKEN_LEFT_PAREN, "Expect '(' after while statement");
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'");
 	expression();
-	consume(TOKEN_RIGHT_PAREN, "Expect ')' after while condition");
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition");
 
 	int jumpOffset = emitJump(OP_JUMP_IF_FALSE);
 
@@ -533,6 +533,66 @@ static void whileStmt() {
 	
 	jumpBackPatching(jumpOffset);
 	emitByte(OP_POP);
+}
+
+static void exprStmt();
+static void forStmt() {
+	// You can use 'while' over 'for' and vice versa
+	// The reason we add 'for' just to add some Syntactic Sugar
+
+	beginScope();
+
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'");
+	
+	// initialization part	
+	if (match(TOKEN_VAR)) {
+		varDeclaration();
+	} else if (match(TOKEN_SEMICOLON)) {
+		// no initializer
+		// nothing to do
+	} else {
+		exprStmt();
+	}
+	
+
+	int loopStart = getCurrentChunk()->count;
+	int exitJump = -1;
+	if (!match(TOKEN_SEMICOLON)) {
+		// condition part
+		expression();
+		consume(TOKEN_SEMICOLON, "Expect ';'");
+
+		exitJump = emitJump(OP_JUMP_IF_FALSE);
+		emitByte(OP_POP);
+	}
+		
+	if (!match(TOKEN_RIGHT_PAREN)) {
+		int jumpBody = emitJump(OP_JUMP);
+		
+		// increment part
+		int incrementStart = getCurrentChunk()->count;
+
+		expression();
+		consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses");
+		
+		emitByte(OP_POP);
+		
+		emitLoop(loopStart);		
+		loopStart = incrementStart;
+		jumpBackPatching(jumpBody);
+	}	
+		
+	// body
+	statement();
+
+	emitLoop(loopStart);
+
+	if (exitJump != -1) {
+		jumpBackPatching(exitJump);
+		emitByte(OP_POP);
+	}
+
+	endScope();
 }
 
 static void exprStmt() {
@@ -551,7 +611,9 @@ static void statement() {
 	} else if (match(TOKEN_IF)) {
 		ifStmt();
 	} else if (match(TOKEN_WHILE)) {
-		whileStmt();	
+		whileStmt();
+	} else if (match(TOKEN_FOR)) {
+		forStmt();	
 	} else {
 		exprStmt();
 	}
@@ -596,12 +658,13 @@ static void declaration() {
  * program        -> declaration* EOF
  * declaration    -> varDeclaration | statement
  * varDeclaration -> "var" IDENTIFIER "=" expression ";"
- * statement      -> printStmt | exprStmt | block | ifStmt | whileStmt
+ * statement      -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
  * printStmt      -> "print" expression ";"
  * exprStmt       -> expression ";"
  * block          -> "{" declaration* "}"
  * ifStmt         -> "if" "(" expression ")" statement ("else" statement)?
  * whileStmt      -> "while" "(" expression ")" statement
+ * forStmt        -> "for" "(" (varDeclaration | exprStmt | ";") expression? ";" expression? ")" statement
  * expression     -> assignment
  * assignment     -> IDENTIFIER "=" assignment | logic_or
  * logic_or       -> logic_and ("or" logic_and)*
