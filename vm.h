@@ -7,8 +7,8 @@
 #include "object.h"
 #include "table.h"
 
+#define FRAMES_MAX 64
 #define STACK_MAX_SIZE 1024
-
 
 typedef enum {
 	INTERPRET_COMPILETIME_ERROR,
@@ -16,10 +16,15 @@ typedef enum {
 	INTERPRET_SUCCESS
 } InterpretResult;
 
-
 typedef struct {
 	Chunk chunk;
 	uint8_t* ip;
+	Value* slots;
+} CallFrame;
+
+typedef struct {
+	CallFrame frames[FRAMES_MAX];
+	int frameCount;
 	Value stack[STACK_MAX_SIZE];
 	Value* topStack;
 	Obj* objects;
