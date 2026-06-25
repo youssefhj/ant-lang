@@ -12,8 +12,7 @@
 VM vm;
 
 void initVM() {
-	initChunk(&vm.chunk);
-	vm.ip = NULL;
+	vm.frameCount = 0;
 	vm.topStack = vm.stack;
 	vm.objects = NULL;
 	initTable(&vm.globals);
@@ -21,16 +20,16 @@ void initVM() {
 }
 
 void freeVM() {
-	freeChunk(&vm.chunk);
 	freeObjects();
 }
 
 static void runtimeError(const char* format, ...) {
 	va_list args;
-	size_t instruction = vm.ip - vm.chunk.code - 1;
-	
+	CallFrame* frame = &vm.frames[vm.frameCount - 1];
+	size_t instruction = frame->ip - frame->chunk.code - 1;
+
 	va_start(args, format);
-	fprintf(stderr, "[line %d] Error: ", vm.chunk.lines[instruction]);
+	fprintf(stderr, "[line %d] Error: ", frame->chunk.lines[instruction]);
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fputs(".\n", stderr);
@@ -72,10 +71,38 @@ static void concatenate() {
 	push(OBJ_VAL(concatenatedString));
 }
 
+static bool call(ObjFunction* function, uint8_t argCount) {
+	if (function->arity != argCount) {
+		runtimeError("Expect %d arguments got %d", function->arity, argCount);
+		return false;
+	}
+
+	CallFrame* frame = &vm.frames[vm.frameCount++];
+	frame->ip = function->chunk.code;
+	frame->chunk = function->chunk;
+	frame->slots = vm.topStack - argCount - 1; 
+					
+	return true;	
+}
+
+static bool callValue(Value value, uint8_t argCount) {
+	if (IS_OBJ(value)) {
+		switch (OBJ_TYPE(value)) {
+			case OBJ_FUNCTION: 
+				return call(AS_FUNCTION(value), argCount);
+		}
+	}
+
+	runtimeError("Can only call functions and classes");
+	return false;
+}
+
 static InterpretResult run() {
-	#define READ_BYTE()             (*vm.ip++)
-	#define READ_SHORT()            (vm.ip += 2, (uint16_t) ((vm.ip[-2] << 8 | vm.ip[-1])))
-	#define READ_CONSTANT()         (vm.chunk.constants.values[READ_BYTE()])
+	CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
+	#define READ_BYTE()             (*frame->ip++)
+	#define READ_SHORT()            (frame->ip += 2, (uint16_t) ((frame->ip[-2] << 8 | frame->ip[-1])))
+	#define READ_CONSTANT()         (frame->chunk.constants.values[READ_BYTE()])
 	#define READ_STRING()           (AS_STRING(READ_CONSTANT()))
         #define BINARY_OP(valueType, operator)                                \
                 do {                                                          \
@@ -100,7 +127,7 @@ static InterpretResult run() {
 			printf(" ]");
 		}
 		printf("\n");
-		disassembleInstruction(&vm.chunk, (int)(vm.ip - vm.chunk.code));
+		disassembleInstruction(&frame->chunk, (int)(frame->ip - frame->chunk.code));
 		#endif
 		switch (instruction = READ_BYTE()) {
 			case OP_ADD: {
@@ -180,28 +207,38 @@ static InterpretResult run() {
 				break;
 			}
 			case OP_GET_LOCAL:
-				push(vm.stack[READ_BYTE()]);
+				push(frame->slots[READ_BYTE()]);
 				break;
 			case OP_SET_LOCAL:
-				vm.stack[READ_BYTE()] = peek(0);
+				frame->slots[READ_BYTE()] = peek(0);
 				break;
 			case OP_JUMP_IF_FALSE: {
 				uint16_t offset = READ_SHORT();
 				if (isFalsey(peek(0))) {
-					vm.ip += offset;
+					frame->ip += offset;
 				}
 				break;
 			}
 			case OP_JUMP: {
 				uint16_t offset = READ_SHORT();
-				vm.ip += offset;
+				frame->ip += offset;
 				break;
 			}
 			case OP_LOOP: {
 				uint16_t offset = READ_SHORT();
-				vm.ip -= offset;
+				frame->ip -= offset;
 				break;
 			}
+			case OP_CALL: {
+				uint8_t argCount = READ_BYTE();
+				
+				if (!callValue(peek(argCount), argCount)) {
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				
+				frame = &vm.frames[vm.frameCount - 1];
+				break;
+			} 
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
 				break;
@@ -210,8 +247,20 @@ static InterpretResult run() {
 				printf("\n");
 				break;
 			case OP_RETURN:
-				return INTERPRET_SUCCESS;
+				Value returnValue = peek(0);
+				vm.frameCount--;
 
+				if (vm.frameCount == 0) {
+					pop();
+					return INTERPRET_SUCCESS;
+				}
+
+				vm.topStack = frame->slots;
+				push(returnValue);
+
+				frame = &vm.frames[vm.frameCount - 1];
+
+				break;
 		}
 		
 	}
@@ -227,11 +276,17 @@ static InterpretResult run() {
 InterpretResult interpret(const char* source) {
 	initVM();
 
-	if (!compile(source, &vm.chunk)) {
+	ObjFunction* function = compile(source);
+	if (function == NULL) {
 		return INTERPRET_COMPILETIME_ERROR;
 	}
 
-	vm.ip = vm.chunk.code;
+	CallFrame* frame = &vm.frames[vm.frameCount++];
+	frame->chunk = function->chunk;
+	frame->ip = function->chunk.code;
+	frame->slots = vm.stack;
+
+	push(OBJ_VAL(function));
 	InterpretResult result = run();
 	
 	freeVM();
