@@ -3,16 +3,20 @@
 
 #include "common.h"
 #include "value.h"
+#include "chunk.h"
 
 #define OBJ_TYPE(value)           (AS_OBJ(value)->type)
 
 #define AS_STRING(value)          ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value)         (((ObjString*)AS_OBJ(value))->chars)
+#define AS_FUNCTION(value)        ((ObjFunction*)AS_OBJ(value))
 
 #define IS_STRING(value)          (isObjType(value, OBJ_STRING))
+#define IS_FUNCTION(value)        (isObjType(value, OBJ_FUNCTION))
 
 typedef enum {
-	OBJ_STRING
+	OBJ_STRING,
+	OBJ_FUNCTION
 } ObjType;
 
 struct Obj {
@@ -27,8 +31,16 @@ typedef struct {
 	uint32_t hash;
 } ObjString;
 
+typedef struct {
+	Obj obj;
+	ObjString* name;
+	int arity;
+	Chunk chunk;
+} ObjFunction;
+
 ObjString* takeString(char* chars, int length);
 ObjString* copyString(const char* start, int length);
+ObjFunction* newFunction();
 void printObject(Value value);
 
 static inline bool isObjType(Value value, ObjType type) {
