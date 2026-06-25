@@ -44,9 +44,17 @@ typedef struct {
 	int scopeDepth;
 } Local;
 
-typedef struct {
+typedef enum {
+	TYPE_SCRIPT,
+	TYPE_FUNCTION
+} FunctionType;
+
+typedef struct Compiler {
+	struct Compiler* enclosing;
+	FunctionType type;
+	ObjFunction* function;
 	Local locals[UINT8_COUNT];
-	int localsCount;
+	int localCount;
 	int currentScope;
 } Compiler;
 
@@ -59,6 +67,7 @@ static void string(bool canAssign);
 static void variable(bool canAssign);
 static void and_(bool canAssign);
 static void or_(bool canAssign);
+static void call(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -73,7 +82,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_LESS_EQUAL]      = {NULL,        binary,        PREC_COMPARISON},
 	[TOKEN_GREATER]         = {NULL,        binary,        PREC_COMPARISON},
 	[TOKEN_GREATER_EQUAL]   = {NULL,        binary,        PREC_COMPARISON},
-	[TOKEN_LEFT_PAREN]      = {grouping,    NULL,          PREC_NONE},
+	[TOKEN_LEFT_PAREN]      = {grouping,    call,          PREC_CALL},
 	[TOKEN_RIGHT_PAREN]     = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_LEFT_BRACE]      = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_RIGHT_BRACE]     = {NULL,        NULL,          PREC_NONE},
@@ -98,7 +107,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_TRUE]            = {literal,     NULL,          PREC_NONE},
 	[TOKEN_FALSE]           = {literal,     NULL,          PREC_NONE},
 	[TOKEN_AND]             = {NULL,        and_,          PREC_AND},
-	[TOKEN_OR]              = {NULL,        or_,          PREC_OR},
+	[TOKEN_OR]              = {NULL,        or_,           PREC_OR},
 	[TOKEN_ERROR]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_EOF]             = {NULL,        NULL,          PREC_NONE}
 };
@@ -166,7 +175,7 @@ static void consume(TokenType type, const char* message) {
 }
 
 static Chunk* getCurrentChunk() {
-	return currentChunk;
+	return &currentCompiler->function->chunk;
 }
 
 static void emitByte(uint8_t byte) {
@@ -230,11 +239,38 @@ static void parsePrecedence(Precedence precedence) {
 	}
 }
 
-static void initCompiler(Compiler* compiler) {
-	compiler->localsCount = 0;
+static void initCompiler(Compiler* compiler, FunctionType type) {
+	compiler->enclosing = currentCompiler;
+	compiler->type = type;
 	compiler->currentScope = 0;
+	
+	compiler->function = newFunction();	
+	if (type != TYPE_SCRIPT) {
+		compiler->function->name = copyString(parser.previous.start, parser.previous.length);
+	}
+	
+	compiler->localCount = 0;
+	Local* local = &compiler->locals[compiler->localCount++];
+	local->name.start = "";
+	local->name.length = 0;
+	local->scopeDepth = 0;
 
 	currentCompiler = compiler;
+}
+
+static ObjFunction* endCompiler() {
+	emitByte(OP_NIL);
+	emitByte(OP_RETURN);
+	
+	ObjFunction* function = currentCompiler->function;
+	if (!parser.hadError) {
+		#ifdef DEBUG_PRINT_CODE
+		disassemble(&function->chunk, function->name == NULL ? "script" : function->name->chars);
+		#endif
+	}
+
+	currentCompiler = currentCompiler->enclosing;
+	return function;
 }
 
 static void expression() {
@@ -309,7 +345,7 @@ static void declaration();
 static int resolveLocal(Token* name) {
 	if (currentCompiler->currentScope <= 0) return -1;
 
-	for (int i = currentCompiler->localsCount - 1; i >= 0; i--) {
+	for (int i = currentCompiler->localCount - 1; i >= 0; i--) {
 		Local* local = &currentCompiler->locals[i];
 
 		if (identifierEquals(&local->name, name)) {
@@ -347,12 +383,12 @@ static void variable(bool canAssign) {
 }
 
 static void addLocal(Token name) {
-	if (currentCompiler->localsCount == UINT8_COUNT) {
+	if (currentCompiler->localCount == UINT8_COUNT) {
 		error("Too many local variables");
 		return;
 	}
 
-	Local* local = &currentCompiler->locals[currentCompiler->localsCount++];
+	Local* local = &currentCompiler->locals[currentCompiler->localCount++];
 	local->name = name;
 	local->scopeDepth = -1;
 }
@@ -361,7 +397,7 @@ static void declareVariable() {
 	if (currentCompiler->currentScope <= 0) return;
 	
 	Token* name = &parser.previous;
-	for (int i = currentCompiler->localsCount - 1; i >= 0; i--) {
+	for (int i = currentCompiler->localCount - 1; i >= 0; i--) {
 		Local* local = &currentCompiler->locals[i];
 
 		if (local->scopeDepth != -1 && local->scopeDepth < currentCompiler->currentScope) {		
@@ -386,7 +422,7 @@ static uint8_t parseVariable(const char* errorMessage) {
 
 static void markInitialized() {
 	if (currentCompiler->currentScope <= 0) return;
-	currentCompiler->locals[currentCompiler->localsCount - 1].scopeDepth = currentCompiler->currentScope;
+	currentCompiler->locals[currentCompiler->localCount - 1].scopeDepth = currentCompiler->currentScope;
 }
 
 static void defineVariable(uint8_t global) {
@@ -432,9 +468,9 @@ static void block() {
 static void endScope() {
 	currentCompiler->currentScope--;
 
-	while (currentCompiler->localsCount > 0 && 
-			currentCompiler->locals[currentCompiler->localsCount - 1].scopeDepth > currentCompiler->currentScope) {
-		currentCompiler->localsCount--;
+	while (currentCompiler->localCount > 0 && 
+			currentCompiler->locals[currentCompiler->localCount - 1].scopeDepth > currentCompiler->currentScope) {
+		currentCompiler->localCount--;
 		emitByte(OP_POP);
 	}
 }
@@ -524,14 +560,14 @@ static void whileStmt() {
 	expression();
 	consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition");
 
-	int jumpOffset = emitJump(OP_JUMP_IF_FALSE);
+	int exitJump = emitJump(OP_JUMP_IF_FALSE);
 
 	emitByte(OP_POP);	
 	statement();	
 
 	emitLoop(loopStart);
 	
-	jumpBackPatching(jumpOffset);
+	jumpBackPatching(exitJump);
 	emitByte(OP_POP);
 }
 
@@ -595,10 +631,85 @@ static void forStmt() {
 	endScope();
 }
 
+static void returnStmt() {
+	if (currentCompiler->type == TYPE_SCRIPT) {
+		error("Can't return from top-level code");
+	}
+
+	if (match(TOKEN_SEMICOLON)) {
+		emitByte(OP_NIL);
+	} else {
+		expression();
+		consume(TOKEN_SEMICOLON, "Expect ';'");
+	}
+
+	emitByte(OP_RETURN);
+}
+
 static void exprStmt() {
 	expression();
 	consume(TOKEN_SEMICOLON, "Expect ';'");
 	emitByte(OP_POP);
+}
+
+static uint8_t argumentList() {
+	uint8_t argCount = 0;
+	if (!check(TOKEN_RIGHT_PAREN)) {
+		do {
+			expression();
+			if (argCount == 255) {
+				error("Can't have more than 255 arguments");
+			}
+			argCount++;
+		} while (match(TOKEN_COMMA));
+	}
+
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments");
+	return argCount;
+}
+
+static void call(bool canAssign) {
+	// Compiler the arguments list
+	uint8_t argCount = argumentList();
+
+	emitBytes(OP_CALL, argCount);
+}
+
+static void function(FunctionType type) {
+	Compiler compiler;
+	initCompiler(&compiler, type);
+	
+	beginScope();
+
+	consume(TOKEN_LEFT_PAREN, "Expect '(' after function name");
+	// Compiler the parameter list
+	if (!check(TOKEN_RIGHT_PAREN)) {
+		do {
+			currentCompiler->function->arity++;
+			if (currentCompiler->function->arity > 255) {
+				errorAtCurrent("Can't have more than 255 parameters");
+			}
+
+			uint8_t paramConstant = parseVariable("Expect parameter name");
+			defineVariable(paramConstant);	
+		} while (match(TOKEN_COMMA));
+	}
+	consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters");
+
+	
+	// function body
+	consume(TOKEN_LEFT_BRACE, "Expect '{' before function body");
+	block();
+
+	ObjFunction* function = endCompiler();
+	emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+}
+
+static void funcDeclaration() {
+	uint8_t global = parseVariable("Expect a function name");
+	markInitialized();
+	function(TYPE_FUNCTION);
+	defineVariable(global);
 }
 
 static void statement() {
@@ -613,7 +724,9 @@ static void statement() {
 	} else if (match(TOKEN_WHILE)) {
 		whileStmt();
 	} else if (match(TOKEN_FOR)) {
-		forStmt();	
+		forStmt();
+	} else if (match(TOKEN_RETURN)) {
+		returnStmt();	
 	} else {
 		exprStmt();
 	}
@@ -645,6 +758,8 @@ static void synchronize() {
 static void declaration() {
 	if (match(TOKEN_VAR)) {
 		varDeclaration();
+	} else if (match(TOKEN_FUNC)) {
+		funcDeclaration();
 	} else {
 		statement();
 	}
@@ -655,47 +770,47 @@ static void declaration() {
 }
 
 /*
- * program        -> declaration* EOF
- * declaration    -> varDeclaration | statement
- * varDeclaration -> "var" IDENTIFIER "=" expression ";"
- * statement      -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt
- * printStmt      -> "print" expression ";"
- * exprStmt       -> expression ";"
- * block          -> "{" declaration* "}"
- * ifStmt         -> "if" "(" expression ")" statement ("else" statement)?
- * whileStmt      -> "while" "(" expression ")" statement
- * forStmt        -> "for" "(" (varDeclaration | exprStmt | ";") expression? ";" expression? ")" statement
- * expression     -> assignment
- * assignment     -> IDENTIFIER "=" assignment | logic_or
- * logic_or       -> logic_and ("or" logic_and)*
- * logic_and      -> equality ("and" equality)*
- * equality       -> comparison (("==" | "!=") comparison)*
- * comparison     -> term ((">" | "<" | ">=" | "<=") term)*
- * term           -> factor (("+" | "-") factor)*
- * factor         -> unary (("*" | "/") unary)*
- * unary          -> ("!" | "-") unary | primary
- * primary        -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
+ * program         -> declaration* EOF
+ * declaration     -> varDeclaration | funcDeclaration | statement
+ * varDeclaration  -> "var" IDENTIFIER "=" expression ";"
+ * funcDeclaration -> "func" function
+ * function        -> IDENTIFIER "(" parameters? ")" block 
+ * parameters      -> IDENTIFER ("," IDENTIFIER)*
+ * statement       -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt | returnStmt
+ * printStmt       -> "print" expression ";"
+ * exprStmt        -> expression ";"
+ * block           -> "{" declaration* "}"
+ * ifStmt          -> "if" "(" expression ")" statement ("else" statement)?
+ * whileStmt       -> "while" "(" expression ")" statement
+ * forStmt         -> "for" "(" (varDeclaration | exprStmt | ";") expression? ";" expression? ")" statement
+ * returnStmt      -> "return" expression? ";"
+ * expression      -> assignment
+ * assignment      -> IDENTIFIER "=" assignment | logic_or
+ * logic_or        -> logic_and ("or" logic_and)*
+ * logic_and       -> equality ("and" equality)*
+ * equality        -> comparison (("==" | "!=") comparison)*
+ * comparison      -> term ((">" | "<" | ">=" | "<=") term)*
+ * term            -> factor (("+" | "-") factor)*
+ * factor          -> unary (("*" | "/") unary)*
+ * unary           -> ("!" | "-") unary | call
+ * call            -> primary ("(" arguments? ")")*
+ * arguments       -> expression ("," expression)*
+ * primary         -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
  */
-bool compile(const char* source, Chunk* chunk) {
+ObjFunction* compile(const char* source) {
 	initScanner(source);
-	currentChunk = chunk;	
 	advance();
 
 	parser.hadError = false;
 	parser.panicMode = false;
 
 	Compiler compiler;
-	initCompiler(&compiler);
+	initCompiler(&compiler, TYPE_SCRIPT);
 
 	while (!match(TOKEN_EOF)) {
 		declaration();
 	}
 
-	emitByte(OP_RETURN);
-
-	#ifdef DEBUG_PRINT_CODE
-	disassemble(currentChunk, "script");
-	#endif
-
-	return parser.hadError ? false : true;
+	ObjFunction* function = endCompiler();
+	return parser.hadError ? NULL : function;
 }
