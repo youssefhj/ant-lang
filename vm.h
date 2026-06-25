@@ -8,7 +8,7 @@
 #include "table.h"
 
 #define FRAMES_MAX 64
-#define STACK_MAX_SIZE 1024
+#define STACK_MAX_SIZE (FRAMES_MAX * 1024)
 
 typedef enum {
 	INTERPRET_COMPILETIME_ERROR,
