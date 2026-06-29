@@ -17,7 +17,7 @@ typedef enum {
 } InterpretResult;
 
 typedef struct {
-	Chunk chunk;
+	ObjFunction* function;
 	uint8_t* ip;
 	Value* slots;
 } CallFrame;
