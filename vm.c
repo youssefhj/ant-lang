@@ -26,10 +26,10 @@ void freeVM() {
 static void runtimeError(const char* format, ...) {
 	va_list args;
 	CallFrame* frame = &vm.frames[vm.frameCount - 1];
-	size_t instruction = frame->ip - frame->chunk.code - 1;
+	size_t instruction = frame->ip - frame->function->chunk.code - 1;
 
 	va_start(args, format);
-	fprintf(stderr, "[line %d] Error: ", frame->chunk.lines[instruction]);
+	fprintf(stderr, "[line %d] Error: ", frame->function->chunk.lines[instruction]);
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fputs(".\n", stderr);
@@ -77,9 +77,14 @@ static bool call(ObjFunction* function, uint8_t argCount) {
 		return false;
 	}
 
+	if (vm.frameCount == FRAMES_MAX) {
+		runtimeError("Stack overflow");
+		return false;
+	}
+
 	CallFrame* frame = &vm.frames[vm.frameCount++];
+	frame->function = function;
 	frame->ip = function->chunk.code;
-	frame->chunk = function->chunk;
 	frame->slots = vm.topStack - argCount - 1; 
 					
 	return true;	
@@ -102,7 +107,7 @@ static InterpretResult run() {
 
 	#define READ_BYTE()             (*frame->ip++)
 	#define READ_SHORT()            (frame->ip += 2, (uint16_t) ((frame->ip[-2] << 8 | frame->ip[-1])))
-	#define READ_CONSTANT()         (frame->chunk.constants.values[READ_BYTE()])
+	#define READ_CONSTANT()         (frame->function->chunk.constants.values[READ_BYTE()])
 	#define READ_STRING()           (AS_STRING(READ_CONSTANT()))
         #define BINARY_OP(valueType, operator)                                \
                 do {                                                          \
@@ -127,7 +132,7 @@ static InterpretResult run() {
 			printf(" ]");
 		}
 		printf("\n");
-		disassembleInstruction(&frame->chunk, (int)(frame->ip - frame->chunk.code));
+		disassembleInstruction(&frame->function->chunk, (int)(frame->ip - frame->function->chunk.code));
 		#endif
 		switch (instruction = READ_BYTE()) {
 			case OP_ADD: {
@@ -282,7 +287,7 @@ InterpretResult interpret(const char* source) {
 	}
 
 	CallFrame* frame = &vm.frames[vm.frameCount++];
-	frame->chunk = function->chunk;
+	frame->function = function;
 	frame->ip = function->chunk.code;
 	frame->slots = vm.stack;
 
