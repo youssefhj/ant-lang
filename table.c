@@ -11,6 +11,11 @@ void initTable(Table* table) {
 	table->entries = NULL;
 }
 
+void freeTable(Table* table) {
+	FREE_ARRAY(Entry, table->entries);
+	initTable(table);
+}
+
 static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
 	if (entries == NULL) return NULL;
 
