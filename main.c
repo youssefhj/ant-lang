@@ -3,32 +3,13 @@
 
 #include "vm.h"
 
-void runFile(const char* filename);
-void repl();
-
-int main(int argc, const char** argv) {
-	if (argc == 2) {
-		// script mode
-		runFile(argv[1]);
-
-	} else if (argc == 1) {
-		// interactive mode 
-		repl();// Read Evaluate Print Loop
-	} else {
-		fprintf(stderr, "Error: Too much arguments\n");
-		fprintf(stderr, "Usage: ant [file]\n");
-		exit(1);
-	}
-	
-	return 0;
-}
 
 void runFile(const char* filename) {
-	FILE* file = fopen(filename, "r");
+	FILE* file = fopen(filename, "rb");
 	
 	if (file == NULL) {
 		perror("Error");
-		exit(1);
+		exit(74);
 	}
 	
 	fseek(file, 0L, SEEK_END);
@@ -40,29 +21,53 @@ void runFile(const char* filename) {
 	size_t readCount = fread(source, sizeof(*source), sizeof(source)/sizeof(source[0]), file); 	
 	if (readCount != count) {
 		fprintf(stderr, "Error: Unable to read the file `%s`\n", filename);
-		exit(1);
+		exit(74);
 	}
 
 	source[count - 1] = '\0';
 
 	fclose(file);
 	
-	interpret(source);
+	InterpretResult result = interpret(source);
+
+	if (result == INTERPRET_COMPILETIME_ERROR) exit(65);
+	if (result == INTERPRET_RUNTIME_ERROR) exit(70);
 }
 
 void repl() {
-	char line[200];
+	char line[1024];
 	
 	for (;;) {
 		printf("> ");
 		
-		if (fgets(line, sizeof(line)/sizeof(line[0]), stdin) == NULL) {
-			fprintf(stderr, "Unable to read line\n");
-			exit(1);
+		if (!fgets(line, sizeof(line), stdin)) {
+			printf("\n");
+			break;
 		}
 		
 		interpret(line);
 
 		printf("\n");
 	}
+}
+
+int main(int argc, const char* argv[]) {
+	initVM();
+
+	if (argc == 2) {
+		// script mode
+		runFile(argv[1]);
+
+	} else if (argc == 1) {
+		// interactive mode 
+		repl();// Read Evaluate Print Loop
+	} else {
+		fprintf(stderr, "Error: Too much arguments\n");
+		fprintf(stderr, "Usage: ant [file]\n");
+		exit(64);
+	}
+	
+	freeVM();
+
+	return 0;
 }
