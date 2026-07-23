@@ -31,6 +31,15 @@ static void freeObject(Obj* object) {
 			FREE(ObjFunction, objFunction);
 			break;
 		}
+		case OBJ_CLOSURE: {
+			ObjClosure* objClosure = (ObjClosure*)object;
+			FREE(ObjClosure, objClosure);
+			break;
+		}
+		case OBJ_UPVALUE: {
+			FREE(ObjUpvalue, (ObjUpvalue*)object);	
+			break;
+		}
 	}
 
 }
