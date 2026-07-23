@@ -1,0 +1,13 @@
+func outer() {
+	var a = 2;
+	func inner() {
+		print a;
+	}
+
+	a = 5;
+	return inner;
+}
+
+var f = outer();
+
+f();
