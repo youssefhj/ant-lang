@@ -44,6 +44,11 @@ typedef struct {
 	int scopeDepth;
 } Local;
 
+typedef struct {
+	uint8_t index;
+	bool isLocal;
+} Upvalue;
+
 typedef enum {
 	TYPE_SCRIPT,
 	TYPE_FUNCTION
@@ -53,6 +58,7 @@ typedef struct Compiler {
 	struct Compiler* enclosing;
 	FunctionType type;
 	ObjFunction* function;
+	Upvalue upvalues[UINT8_COUNT];
 	Local locals[UINT8_COUNT];
 	int localCount;
 	int currentScope;
@@ -342,11 +348,11 @@ static void string(bool canAssign) {
 static void statement();
 static void declaration();
 
-static int resolveLocal(Token* name) {
-	if (currentCompiler->currentScope <= 0) return -1;
+static int resolveLocal(Compiler* compiler, Token* name) {
+	if (compiler->currentScope <= 0) return -1;
 
-	for (int i = currentCompiler->localCount - 1; i >= 0; i--) {
-		Local* local = &currentCompiler->locals[i];
+	for (int i = compiler->localCount - 1; i >= 0; i--) {
+		Local* local = &compiler->locals[i];
 
 		if (identifierEquals(&local->name, name)) {
 			if (local->scopeDepth == -1) {
@@ -360,18 +366,61 @@ static int resolveLocal(Token* name) {
 	return -1;
 }
 
+static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal) {
+	int upvalueCount = compiler->function->upvalueCount;
+
+	for (int i = 0; i < upvalueCount; i++) {
+		Upvalue* upvalue = &compiler->upvalues[i];
+		if (isLocal == upvalue->isLocal && index == upvalue->index) {
+			return i;
+		}	
+	}
+
+	if (upvalueCount == UINT8_COUNT) {
+		error("Too many closure variables in function");
+	}
+
+	
+	compiler->upvalues[upvalueCount].index = index;
+	compiler->upvalues[upvalueCount].isLocal = isLocal;
+
+	return compiler->function->upvalueCount++;
+
+}
+
+static int resolveUpvalue(Compiler* compiler, Token* name) {
+	if (compiler->enclosing == NULL) {
+		return -1;
+	}
+
+	int local = resolveLocal(compiler->enclosing, name);
+	if (local != -1) {
+		return addUpvalue(compiler, (uint8_t)local, true); 
+	}
+
+	int upvalue = resolveUpvalue(compiler->enclosing, name);
+	if (upvalue != -1) {
+		return addUpvalue(compiler, (uint8_t)upvalue, false);
+	}
+	
+	return -1;
+}
+
 static void variable(bool canAssign) {
 	uint8_t opSet, opGet;
-	int constant = resolveLocal(&parser.previous);
+	int constant = resolveLocal(currentCompiler, &parser.previous);
 
-	if (constant == -1) {
+	if (constant != -1) {
+		opSet = OP_SET_LOCAL;
+		opGet = OP_GET_LOCAL;
+	} else if ((constant = resolveUpvalue(currentCompiler, &parser.previous)) != -1) {
+		opSet = OP_SET_UPVALUE;
+		opGet = OP_GET_UPVALUE;
+	} else {
 		constant = makeIdentifierConstant(parser.previous);
 		
 		opSet = OP_SET_GLOBAL;
 		opGet = OP_GET_GLOBAL;
-	} else {
-		opSet = OP_SET_LOCAL;
-		opGet = OP_GET_LOCAL;
 	}
 	
 	if (canAssign && match(TOKEN_EQUAL)) {
@@ -702,7 +751,12 @@ static void function(FunctionType type) {
 	block();
 
 	ObjFunction* function = endCompiler();
-	emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+	emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+	
+	for (int i = 0; i < function->upvalueCount; i++) {
+		emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+		emitByte(compiler.upvalues[i].index);
+	}
 }
 
 static void funcDeclaration() {
