@@ -11,11 +11,15 @@
 
 VM vm;
 
-void initVM() {
+static void resetStack() {
 	vm.frameCount = 0;
 	vm.topStack = vm.stack;
 	vm.objects = NULL;
 	vm.openUpvalues = NULL;
+}
+
+void initVM() {
+	resetStack();
 	initTable(&vm.globals);
 	initTable(&vm.strings);
 }
@@ -28,14 +32,28 @@ void freeVM() {
 
 static void runtimeError(const char* format, ...) {
 	va_list args;
-	CallFrame* frame = &vm.frames[vm.frameCount - 1];
-	size_t instruction = frame->ip - frame->closure->function->chunk.code - 1;
 
 	va_start(args, format);
-	fprintf(stderr, "[line %d] Error: ", frame->closure->function->chunk.lines[instruction]);
 	vfprintf(stderr, format, args);
 	va_end(args);
 	fputs(".\n", stderr);
+
+	for (int i = vm.frameCount - 1; i >= 0; i--) {
+		CallFrame* frame = &vm.frames[i];
+
+		ObjFunction* function = frame->closure->function;
+
+		size_t instruction = frame->ip - function->chunk.code - 1;
+		fprintf(stderr, "[line %d] in ", function->chunk.lines[instruction]);
+
+		if (function->name == NULL) {
+			fprintf(stderr, "script\n");
+		} else {
+			fprintf(stderr, "%s()\n", function->name->chars);
+		}
+	}
+
+	resetStack();
 }
 
 static void push(Value value) {
