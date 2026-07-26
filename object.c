@@ -102,6 +102,14 @@ ObjUpvalue* newUpvalue(Value* slot) {
 	return upvalue;
 }
 
+ObjNative* newNative(NativeFn function) {
+	ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+
+	native->function = function;
+
+	return native;
+}
+
 static void printFunction(ObjFunction* function) {
 	if (function->name == NULL) {
 		printf("<script>");
@@ -116,5 +124,7 @@ void printObject(Value value) {
 		case OBJ_STRING: printf("%s", AS_CSTRING(value)); break;
 		case OBJ_FUNCTION: printFunction(AS_FUNCTION(value)); break;
 		case OBJ_CLOSURE: printFunction(AS_CLOSURE(value)->function); break;
+		case OBJ_UPVALUE: printf("upvalue"); break;
+		case OBJ_NATIVE: printf("<native fn>"); break;
 	}
 }
