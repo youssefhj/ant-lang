@@ -1,3 +1,8 @@
+var start = clock(); // native function
+print "start time: ";
+print start;
+print "";
+
 func outer() {
 	var a = 2;
 	func inner() {
@@ -11,3 +16,12 @@ func outer() {
 var f = outer();
 
 f();
+print "";
+
+var end = clock();
+print "end time: ";
+print end;
+print "";
+
+print "Execution time is: ";
+print end - start;
