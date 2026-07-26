@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <time.h>
 
 #include "vm.h"
 #include "common.h"
@@ -10,6 +11,17 @@
 #include "memory.h"
 
 VM vm;
+
+static Value clockNative(int argCount, Value* args) {
+	return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+static void defineNative(const char* name, NativeFn function) {
+	ObjString* key = copyString(name, (int)strlen(name));
+	ObjNative* native = newNative(function);
+	
+	tableSet(&vm.globals, key, OBJ_VAL(native));
+}
 
 static void resetStack() {
 	vm.frameCount = 0;
@@ -22,6 +34,8 @@ void initVM() {
 	resetStack();
 	initTable(&vm.globals);
 	initTable(&vm.strings);
+
+	defineNative("clock", clockNative);
 }
 
 void freeVM() {
@@ -116,6 +130,13 @@ static bool callValue(Value callee, uint8_t argCount) {
 		switch (OBJ_TYPE(callee)) {
 			case OBJ_CLOSURE: 
 				return call(AS_CLOSURE(callee), argCount);
+			case OBJ_NATIVE: {
+				NativeFn native = AS_NATIVE(callee);
+				Value result = native(argCount, vm.topStack - argCount);
+				vm.topStack = vm.topStack - argCount - 1;
+				push(result);
+				return true;
+			}
 		}
 	}
 
