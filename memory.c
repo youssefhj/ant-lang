@@ -40,6 +40,11 @@ static void freeObject(Obj* object) {
 			FREE(ObjUpvalue, (ObjUpvalue*)object);	
 			break;
 		}
+		case OBJ_NATIVE: {
+			FREE(ObjNative, (ObjNative*)object);	
+			break;
+
+		}
 	}
 
 }
