@@ -3,13 +3,19 @@ print "start time: ";
 print start;
 print "";
 
+func sayHello(message) {
+	print "Hello "  + message;
+}
+
+sayHello("ant Developers :)");
+
 func outer() {
-	var a = 2;
+	var a = 2026;
 	func inner() {
 		print a;
 	}
 
-	a = 5;
+	a = 2027;
 	return inner;
 }
 
