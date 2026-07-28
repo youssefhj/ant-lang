@@ -51,7 +51,8 @@ typedef struct {
 
 typedef enum {
 	TYPE_SCRIPT,
-	TYPE_FUNCTION
+	TYPE_FUNCTION,
+	TYPE_METHOD
 } FunctionType;
 
 typedef struct Compiler {
@@ -74,6 +75,7 @@ static void variable(bool canAssign);
 static void and_(bool canAssign);
 static void or_(bool canAssign);
 static void call(bool canAssign);
+static void dot(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -94,7 +96,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_RIGHT_BRACE]     = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_SEMICOLON]       = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_COMMA]           = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_DOT]             = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_DOT]             = {NULL,        dot,           PREC_CALL},
 	[TOKEN_IDENTIFIER]      = {variable,    NULL,          PREC_NONE},
 	[TOKEN_STRING]          = {string,      NULL,          PREC_NONE},
 	[TOKEN_NUMBER]          = {number,      NULL,          PREC_NONE},
@@ -406,18 +408,18 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 	return -1;
 }
 
-static void variable(bool canAssign) {
+static void namedVariable(Token name, bool canAssign) {
 	uint8_t opSet, opGet;
-	int constant = resolveLocal(currentCompiler, &parser.previous);
+	int constant = resolveLocal(currentCompiler, &name);
 
 	if (constant != -1) {
 		opSet = OP_SET_LOCAL;
 		opGet = OP_GET_LOCAL;
-	} else if ((constant = resolveUpvalue(currentCompiler, &parser.previous)) != -1) {
+	} else if ((constant = resolveUpvalue(currentCompiler, &name)) != -1) {
 		opSet = OP_SET_UPVALUE;
 		opGet = OP_GET_UPVALUE;
 	} else {
-		constant = makeIdentifierConstant(parser.previous);
+		constant = makeIdentifierConstant(name);
 		
 		opSet = OP_SET_GLOBAL;
 		opGet = OP_GET_GLOBAL;
@@ -429,6 +431,10 @@ static void variable(bool canAssign) {
 	} else {
 		emitBytes(opGet, (uint8_t)constant);
 	}
+}
+
+static void variable(bool canAssign) {
+	namedVariable(parser.previous, canAssign);
 }
 
 static void addLocal(Token name) {
@@ -724,6 +730,19 @@ static void call(bool canAssign) {
 	emitBytes(OP_CALL, argCount);
 }
 
+static void dot(bool canAssign) {
+	consume(TOKEN_IDENTIFIER, "Expect property name after '.'");
+
+	uint8_t constant = makeIdentifierConstant(parser.previous);
+	
+	if (canAssign && match(TOKEN_EQUAL)) {
+		expression();
+		emitBytes(OP_SET_PROPERTY, constant);
+	} else {
+		emitBytes(OP_GET_PROPERTY, constant);
+	}
+}
+
 static void function(FunctionType type) {
 	Compiler compiler;
 	initCompiler(&compiler, type);
@@ -764,6 +783,34 @@ static void funcDeclaration() {
 	markInitialized();
 	function(TYPE_FUNCTION);
 	defineVariable(global);
+}
+
+static void method() {
+	consume(TOKEN_IDENTIFIER, "Expect a method name");
+	uint8_t constant = makeIdentifierConstant(parser.previous);
+
+	function(TYPE_METHOD);
+	emitBytes(OP_METHOD, constant);	
+}
+
+static void classDeclaration() {
+	consume(TOKEN_IDENTIFIER, "Expect class name");
+
+	uint8_t nameConstant = makeIdentifierConstant(parser.previous);
+	declareVariable();		
+
+	emitBytes(OP_CLASS, nameConstant); 
+	defineVariable(nameConstant);
+	
+	namedVariable(parser.previous, false);
+
+	consume(TOKEN_LEFT_BRACE, "Expect '{' befor class body");
+	// class body
+	while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+		method();
+	}	
+	consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body");
+	emitByte(OP_POP);
 }
 
 static void statement() {
@@ -814,6 +861,8 @@ static void declaration() {
 		varDeclaration();
 	} else if (match(TOKEN_FUNC)) {
 		funcDeclaration();
+	} else if (match(TOKEN_CLASS)) {
+		classDeclaration();
 	} else {
 		statement();
 	}
@@ -824,32 +873,33 @@ static void declaration() {
 }
 
 /*
- * program         -> declaration* EOF
- * declaration     -> varDeclaration | funcDeclaration | statement
- * varDeclaration  -> "var" IDENTIFIER "=" expression ";"
- * funcDeclaration -> "func" function
- * function        -> IDENTIFIER "(" parameters? ")" block 
- * parameters      -> IDENTIFER ("," IDENTIFIER)*
- * statement       -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt | returnStmt
- * printStmt       -> "print" expression ";"
- * exprStmt        -> expression ";"
- * block           -> "{" declaration* "}"
- * ifStmt          -> "if" "(" expression ")" statement ("else" statement)?
- * whileStmt       -> "while" "(" expression ")" statement
- * forStmt         -> "for" "(" (varDeclaration | exprStmt | ";") expression? ";" expression? ")" statement
- * returnStmt      -> "return" expression? ";"
- * expression      -> assignment
- * assignment      -> IDENTIFIER "=" assignment | logic_or
- * logic_or        -> logic_and ("or" logic_and)*
- * logic_and       -> equality ("and" equality)*
- * equality        -> comparison (("==" | "!=") comparison)*
- * comparison      -> term ((">" | "<" | ">=" | "<=") term)*
- * term            -> factor (("+" | "-") factor)*
- * factor          -> unary (("*" | "/") unary)*
- * unary           -> ("!" | "-") unary | call
- * call            -> primary ("(" arguments? ")")*
- * arguments       -> expression ("," expression)*
- * primary         -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
+ * program          -> declaration* EOF
+ * declaration      -> varDeclaration | funcDeclaration | classDeclaration | statement
+ * varDeclaration   -> "var" IDENTIFIER "=" expression ";"
+ * funcDeclaration  -> "func" function
+ * function         -> IDENTIFIER "(" parameters? ")" block 
+ * parameters       -> IDENTIFER ("," IDENTIFIER)*
+ * classDeclaration -> "class" IDENTIFIER "{" function* "}"
+ * statement        -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt | returnStmt
+ * printStmt        -> "print" expression ";"
+ * exprStmt         -> expression ";"
+ * block            -> "{" declaration* "}"
+ * ifStmt           -> "if" "(" expression ")" statement ("else" statement)?
+ * whileStmt        -> "while" "(" expression ")" statement
+ * forStmt          -> "for" "(" (varDeclaration | exprStmt | ";") expression? ";" expression? ")" statement
+ * returnStmt       -> "return" expression? ";"
+ * expression       -> assignment
+ * assignment       -> (call ".")? IDENTIFIER "=" assignment | logic_or
+ * logic_or         -> logic_and ("or" logic_and)*
+ * logic_and        -> equality ("and" equality)*
+ * equality         -> comparison (("==" | "!=") comparison)*
+ * comparison       -> term ((">" | "<" | ">=" | "<=") term)*
+ * term             -> factor (("+" | "-") factor)*
+ * factor           -> unary (("*" | "/") unary)*
+ * unary            -> ("!" | "-") unary | call
+ * call             -> primary ("(" arguments? ")" | "." IDENTIFIER)*
+ * arguments        -> expression ("," expression)*
+ * primary          -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
  */
 ObjFunction* compile(const char* source) {
 	initScanner(source);
