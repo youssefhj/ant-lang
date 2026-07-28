@@ -4,6 +4,7 @@
 #include "common.h"
 
 typedef struct Obj Obj;
+typedef struct ObjString ObjString;
 
 #define NUMBER_VAL(value)          ((Value){VAL_NUMBER, {.number = value}})
 #define BOOL_VAL(value)            ((Value){VAL_BOOL, {.boolean = value}})
