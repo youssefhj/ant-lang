@@ -137,6 +137,11 @@ static bool callValue(Value callee, uint8_t argCount) {
 				push(result);
 				return true;
 			}
+			case OBJ_CLASS: {
+				ObjInstance* instance = newInstance(AS_CLASS(pop()));
+				push(OBJ_VAL(instance));
+				return true;
+			}
 		}
 	}
 
@@ -178,6 +183,13 @@ static void closeUpvalues(Value* last) {
 		vm.openUpvalues = upvalue->next;
 	}
 
+}
+
+static void defineMethod(ObjString* name) {
+	Value method = peek(0);
+	ObjClass* klass = AS_CLASS(peek(1));
+	tableSet(&klass->methods, name, method);
+	pop();
 }
 
 static InterpretResult run() {
@@ -346,6 +358,45 @@ static InterpretResult run() {
 			case OP_SET_UPVALUE: 
 				*frame->closure->upvalues[READ_BYTE()]->location = peek(0);
 				break;
+			case OP_CLASS:
+				push(OBJ_VAL(newClass(READ_STRING())));
+				break;
+			case OP_METHOD:
+				defineMethod(READ_STRING());
+				break;
+			case OP_GET_PROPERTY: {
+				if (!IS_INSTANCE(peek(0))) {
+					runtimeError("Only instances have properties");
+					return INTERPRET_RUNTIME_ERROR;	
+				}
+				
+				ObjInstance* instance = AS_INSTANCE(peek(0));
+				ObjString* name = READ_STRING();
+
+				Value value;
+
+				if (tableGet(&instance->fields, name, &value)) {
+					pop();
+					push(value);
+					break;
+				}
+				
+				runtimeError("Undefined property '%s'", name->chars);
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			case OP_SET_PROPERTY: {
+				if (!IS_INSTANCE(peek(1))) {
+					runtimeError("Only instances have fields");
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				ObjInstance* instance = AS_INSTANCE(peek(1));
+				tableSet(&instance->fields, READ_STRING(), peek(0));
+
+				Value value = pop();
+				pop();
+				push(value);
+				break;
+			}
 			case OP_CONSTANT:
 				push(READ_CONSTANT());
 				break;
