@@ -2,7 +2,6 @@
 #define ANT_TABLE_H
 
 #include "common.h"
-#include "object.h"
 #include "value.h"
 
 typedef struct {

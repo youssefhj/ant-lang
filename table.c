@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "object.h"
 #include "table.h"
 #include "memory.h"
 
