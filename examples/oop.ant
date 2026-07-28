@@ -1,0 +1,14 @@
+// Class declaration
+class Person {}
+
+// Object
+var p = Person(); // Instantiation
+
+// Setting properties
+p.name = "Test";
+p.age = 20;
+
+// Getting properties
+print "name is: " + p.name;
+print "age is: ";
+print p.age;
