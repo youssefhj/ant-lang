@@ -20,30 +20,43 @@ void* reallocate(void* ptr, size_t newSize) {
 static void freeObject(Obj* object) {
 	switch (object->type) {
 		case OBJ_STRING: {
-			ObjString* objString = (ObjString*)object;
-			FREE_ARRAY(char, objString->chars);
-			FREE(ObjString, objString);
+			ObjString* string = (ObjString*)object;
+			FREE_ARRAY(char, string->chars);
+			FREE(ObjString, object);
 			break;
 		}
 		case OBJ_FUNCTION: {
-			ObjFunction* objFunction = (ObjFunction*)object;
-			freeChunk(&objFunction->chunk);
-			FREE(ObjFunction, objFunction);
+			ObjFunction* function = (ObjFunction*)object;
+			freeChunk(&function->chunk);
+			FREE(ObjFunction, object);
 			break;
 		}
 		case OBJ_CLOSURE: {
-			ObjClosure* objClosure = (ObjClosure*)object;
-			FREE(ObjClosure, objClosure);
+			ObjClosure* closure = (ObjClosure*)object;
+			FREE_ARRAY(ObjUpvalue*, closure->upvalues);
+			FREE(ObjClosure, object);
 			break;
 		}
 		case OBJ_UPVALUE: {
-			FREE(ObjUpvalue, (ObjUpvalue*)object);	
+			FREE(ObjUpvalue, object);	
 			break;
 		}
 		case OBJ_NATIVE: {
-			FREE(ObjNative, (ObjNative*)object);	
+			FREE(ObjNative, object);	
 			break;
 
+		}
+		case OBJ_CLASS: {
+			ObjClass* klass = (ObjClass*)object;
+			freeTable(&klass->methods);
+			FREE(ObjClass, object);	
+			break;
+		}
+		case OBJ_INSTANCE: {
+			ObjInstance* instance = (ObjInstance*)object;
+			freeTable(&instance->fields);
+			FREE(ObjInstance, object);	
+			break;
 		}
 	}
 
