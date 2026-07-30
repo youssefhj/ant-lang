@@ -1,5 +1,13 @@
 // Class declaration
-class Person {}
+class Person {
+	eat(something) {
+		print "eating " + something;
+	}
+
+	sleep() {
+		print "sleeping Zzzzz";
+	}
+}
 
 // Object
 var p = Person(); // Instantiation
@@ -12,3 +20,7 @@ p.age = 20;
 print "name is: " + p.name;
 print "age is: ";
 print p.age;
+
+// Methods invokation
+p.eat("Pizza");
+p.sleep();
