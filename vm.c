@@ -34,6 +34,7 @@ void initVM() {
 	resetStack();
 	initTable(&vm.globals);
 	initTable(&vm.strings);
+	vm.initString = copyString("init", 4);
 
 	defineNative("clock", clockNative);
 }
@@ -41,6 +42,7 @@ void initVM() {
 void freeVM() {
 	freeTable(&vm.globals);
 	freeTable(&vm.strings);
+	vm.initString = NULL;
 	freeObjects();
 }
 
@@ -108,7 +110,7 @@ static void concatenate() {
 
 static bool call(ObjClosure* closure, uint8_t argCount) {
 	if (closure->function->arity != argCount) {
-		runtimeError("Expect %d arguments got %d", closure->function->arity, argCount);
+		runtimeError("Expect %d arguments but got %d", closure->function->arity, argCount);
 		return false;
 	}
 
@@ -138,9 +140,23 @@ static bool callValue(Value callee, uint8_t argCount) {
 				return true;
 			}
 			case OBJ_CLASS: {
-				ObjInstance* instance = newInstance(AS_CLASS(pop()));
-				push(OBJ_VAL(instance));
+				ObjClass* klass = AS_CLASS(peek(argCount));
+				vm.topStack[-argCount - 1] = OBJ_VAL(newInstance(klass));
+
+				Value initializer;
+				if (tableGet(&klass->methods, vm.initString, &initializer)) {
+					return call(AS_CLOSURE(initializer), argCount);
+				} else if (argCount != 0) {
+					runtimeError("Expect 0 arguments but got %d", argCount);
+					return false;
+				}
+
 				return true;
+			}
+			case OBJ_BOUND_METHOD: {
+				ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
+				vm.topStack[-argCount - 1] = bound->receiver;
+				return call(bound->method, argCount);
 			}
 		}
 	}
@@ -193,14 +209,13 @@ static void defineMethod(ObjString* name) {
 }
 
 static bool invokeFromClass(ObjClass* klass, ObjString* name, uint8_t argCount) {
-	Value value;
-	if (!tableGet(&klass->methods, name, &value)) {
+	Value method;
+	if (!tableGet(&klass->methods, name, &method)) {
 		runtimeError("Undefined property '%s'", name->chars);
 		return false;
 	}
 
-	vm.topStack[-argCount - 1] = value;
-	return callValue(value, argCount);
+	return call(AS_CLOSURE(method), argCount);
 }
 
 static bool invoke(ObjString* name, uint8_t argCount) {
@@ -218,6 +233,20 @@ static bool invoke(ObjString* name, uint8_t argCount) {
 	}
 
 	return invokeFromClass(instance->klass, name, argCount);
+}
+
+static bool boundMethod(ObjClass* klass, ObjString* name) {
+	Value method;
+	if (!tableGet(&klass->methods, name, &method)) {
+		runtimeError("Undefined property '%s'", name->chars);
+		return false;
+	}
+
+	ObjBoundMethod* bound = newBoundMethod(peek(0), AS_CLOSURE(method));
+	pop();
+	push(OBJ_VAL(bound));
+
+	return true;
 }
 
 static InterpretResult run() {
@@ -409,14 +438,11 @@ static InterpretResult run() {
 					break;
 				}
 
-				if (tableGet(&instance->klass->methods, name, &value)) {
-					pop();
-					push(value);
-					break;
+				if (!boundMethod(instance->klass, name)) {
+					return INTERPRET_RUNTIME_ERROR;
 				}
 				
-				runtimeError("Undefined property '%s'", name->chars);
-				return INTERPRET_RUNTIME_ERROR;
+				break;
 			}
 			case OP_SET_PROPERTY: {
 				if (!IS_INSTANCE(peek(1))) {
