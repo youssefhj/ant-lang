@@ -29,6 +29,7 @@ typedef struct {
 	Value* topStack;
 	Obj* objects;
 	ObjUpvalue* openUpvalues;
+	ObjString* initString;
 	Table globals;
 	Table strings;
 } VM;
