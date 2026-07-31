@@ -58,8 +58,11 @@ static void freeObject(Obj* object) {
 			FREE(ObjInstance, object);	
 			break;
 		}
+		case OBJ_BOUND_METHOD: {
+			FREE(ObjBoundMethod, object);
+			break;
+		}
 	}
-
 }
 
 void freeObjects() {
