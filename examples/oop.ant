@@ -1,5 +1,13 @@
 // Class declaration
 class Person {
+	// Constructor
+	init(name, age) {
+		// 'this' is a special variable 
+		//        that refrence to the current object
+		this.name = name;
+		this.age = age;
+	}
+
 	eat(something) {
 		print "eating " + something;
 	}
@@ -10,16 +18,19 @@ class Person {
 }
 
 // Object
-var p = Person(); // Instantiation
-
-// Setting properties
-p.name = "Test";
-p.age = 20;
+var p = Person("Test", 20); // Instantiation
 
 // Getting properties
 print "name is: " + p.name;
 print "age is: ";
 print p.age;
+print "";
+
+// Setting properties
+p.age = 25;
+print "Am getting older ";
+print p.age;
+print "";
 
 // Methods invokation
 p.eat("Pizza");
