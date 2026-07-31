@@ -52,7 +52,8 @@ typedef struct {
 typedef enum {
 	TYPE_SCRIPT,
 	TYPE_FUNCTION,
-	TYPE_METHOD
+	TYPE_METHOD,
+	TYPE_INITIALIZER
 } FunctionType;
 
 typedef struct Compiler {
@@ -76,6 +77,7 @@ static void and_(bool canAssign);
 static void or_(bool canAssign);
 static void call(bool canAssign);
 static void dot(bool canAssign);
+static void this_(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -108,7 +110,7 @@ PrecedenceRule rules[] = {
 	[TOKEN_FOR]             = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_FUNC]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_CLASS]           = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_THIS]            = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_THIS]            = {this_,        NULL,         PREC_NONE},
 	[TOKEN_SUPER]           = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_NIL]             = {literal,     NULL,          PREC_NONE},
 	[TOKEN_RETURN]          = {NULL,        NULL,          PREC_NONE},
@@ -259,17 +261,32 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 	
 	compiler->localCount = 0;
 	Local* local = &compiler->locals[compiler->localCount++];
-	local->name.start = "";
-	local->name.length = 0;
+	if (type != TYPE_FUNCTION) {
+		local->name.start = "this";
+		local->name.length = 4;
+	} else {
+		local->name.start = "";
+		local->name.length = 0;
+	}
+
 	local->scopeDepth = 0;
 
 	currentCompiler = compiler;
 }
 
-static ObjFunction* endCompiler() {
-	emitByte(OP_NIL);
+static void emitReturn() {
+	if (currentCompiler->type == TYPE_INITIALIZER) {
+		emitBytes(OP_GET_LOCAL, 0);
+	} else {
+		emitByte(OP_NIL);
+	}
+
 	emitByte(OP_RETURN);
-	
+}
+
+static ObjFunction* endCompiler() {
+	emitReturn();
+
 	ObjFunction* function = currentCompiler->function;
 	if (!parser.hadError) {
 		#ifdef DEBUG_PRINT_CODE
@@ -692,13 +709,16 @@ static void returnStmt() {
 	}
 
 	if (match(TOKEN_SEMICOLON)) {
-		emitByte(OP_NIL);
+		emitReturn();
 	} else {
+		if (currentCompiler->type == TYPE_INITIALIZER) {
+			error("Can't return a value from initializer");
+		}
+
 		expression();
 		consume(TOKEN_SEMICOLON, "Expect ';'");
+		emitByte(OP_RETURN);
 	}
-
-	emitByte(OP_RETURN);
 }
 
 static void exprStmt() {
@@ -747,6 +767,14 @@ static void dot(bool canAssign) {
 	}
 }
 
+static void this_(bool canAssign) {
+	if (currentCompiler->type != TYPE_METHOD && currentCompiler->type != TYPE_INITIALIZER) {
+		error("Can't use this outside a class");
+	}
+
+	variable(false);
+}
+
 static void function(FunctionType type) {
 	Compiler compiler;
 	initCompiler(&compiler, type);
@@ -792,8 +820,13 @@ static void funcDeclaration() {
 static void method() {
 	consume(TOKEN_IDENTIFIER, "Expect a method name");
 	uint8_t constant = makeIdentifierConstant(parser.previous);
+	FunctionType type = TYPE_METHOD;
+	Token* name = &parser.previous;
+	if (name->length == 4 && memcmp(name->start, "init", 4) == 0) {
+		type = TYPE_INITIALIZER;
+	}
 
-	function(TYPE_METHOD);
+	function(type);
 	emitBytes(OP_METHOD, constant);	
 }
 
