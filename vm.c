@@ -282,6 +282,31 @@ static InterpretResult run() {
 		disassembleInstruction(&frame->closure->function->chunk, (int)(frame->ip - frame->closure->function->chunk.code));
 		#endif
 		switch (instruction = READ_BYTE()) {
+			case OP_CONSTANT:
+				push(READ_CONSTANT());
+				break;
+			case OP_PRINT:
+				printValue(pop());
+				printf("\n");
+				break;
+			case OP_RETURN: {
+				Value returnValue = pop();
+				vm.frameCount--;
+		
+				closeUpvalues(frame->slots);
+
+				if (vm.frameCount == 0) {
+					pop();
+					return INTERPRET_SUCCESS;
+				}
+
+				vm.topStack = frame->slots;
+				push(returnValue);
+
+				frame = &vm.frames[vm.frameCount - 1];
+
+				break;
+			}
 			case OP_ADD: {
 				if (IS_STRING(peek(1)) && IS_STRING(peek(0))) {
 					concatenate();
@@ -415,6 +440,10 @@ static InterpretResult run() {
 			case OP_SET_UPVALUE: 
 				*frame->closure->upvalues[READ_BYTE()]->location = peek(0);
 				break;
+			case OP_CLOSE_UPVALUE:
+				closeUpvalues(vm.topStack - 1);
+				pop();
+				break;
 			case OP_CLASS:
 				push(OBJ_VAL(newClass(READ_STRING())));
 				break;
@@ -468,32 +497,19 @@ static InterpretResult run() {
 				frame = &vm.frames[vm.frameCount - 1];
 				break;
 			}
-			case OP_CONSTANT:
-				push(READ_CONSTANT());
-				break;
-			case OP_PRINT:
-				printValue(pop());
-				printf("\n");
-				break;
-			case OP_RETURN:
-				Value returnValue = pop();
-				vm.frameCount--;
-		
-				closeUpvalues(frame->slots);
-
-				if (vm.frameCount == 0) {
-					pop();
-					return INTERPRET_SUCCESS;
+			case OP_INHERIT: {
+				Value superclass = peek(1);
+				if (!IS_CLASS(superclass)) {
+					runtimeError("Superclass must be a class");
+					return INTERPRET_RUNTIME_ERROR;
 				}
 
-				vm.topStack = frame->slots;
-				push(returnValue);
-
-				frame = &vm.frames[vm.frameCount - 1];
-
+				ObjClass* subclass = AS_CLASS(peek(0));
+				tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
+				pop();
 				break;
-		}
-		
+			}
+		}	
 	}
 	
 	#undef READ_BYTE
