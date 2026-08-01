@@ -5,6 +5,9 @@
 #include "value.h"
 
 typedef enum {
+	OP_CONSTANT,
+	OP_PRINT,
+	OP_RETURN,
 	OP_ADD,
 	OP_SUBTRACT,
 	OP_MULTIPLY,
@@ -30,14 +33,13 @@ typedef enum {
 	OP_CLOSURE,
 	OP_GET_UPVALUE,
 	OP_SET_UPVALUE,
+	OP_CLOSE_UPVALUE,
 	OP_CLASS,
 	OP_METHOD,
 	OP_GET_PROPERTY,
 	OP_SET_PROPERTY,
 	OP_INVOKE,
-	OP_CONSTANT,
-	OP_PRINT,
-	OP_RETURN	
+	OP_INHERIT
 } OpCode;
 
 typedef struct {
