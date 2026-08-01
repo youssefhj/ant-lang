@@ -42,6 +42,7 @@ typedef struct {
 typedef struct {
 	Token name;
 	int scopeDepth;
+	bool isCaptured;
 } Local;
 
 typedef struct {
@@ -66,6 +67,12 @@ typedef struct Compiler {
 	int currentScope;
 } Compiler;
 
+typedef struct ClassCompiler {
+	struct ClassCompiler* enclosing;
+	Token name;
+	bool hasSuperClass;
+} ClassCompiler;
+
 static void binary(bool canAssign);
 static void unary(bool canAssign);
 static void grouping(bool canAssign);
@@ -78,6 +85,7 @@ static void or_(bool canAssign);
 static void call(bool canAssign);
 static void dot(bool canAssign);
 static void this_(bool canAssign);
+static void super_(bool canAssign);
 
 PrecedenceRule rules[] = {
 	[TOKEN_PLUS]            = {NULL,        binary,        PREC_TERM},
@@ -110,8 +118,8 @@ PrecedenceRule rules[] = {
 	[TOKEN_FOR]             = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_FUNC]            = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_CLASS]           = {NULL,        NULL,          PREC_NONE},
-	[TOKEN_THIS]            = {this_,        NULL,         PREC_NONE},
-	[TOKEN_SUPER]           = {NULL,        NULL,          PREC_NONE},
+	[TOKEN_THIS]            = {this_,       NULL,          PREC_NONE},
+	[TOKEN_SUPER]           = {super_,      NULL,          PREC_NONE},
 	[TOKEN_NIL]             = {literal,     NULL,          PREC_NONE},
 	[TOKEN_RETURN]          = {NULL,        NULL,          PREC_NONE},
 	[TOKEN_TRUE]            = {literal,     NULL,          PREC_NONE},
@@ -125,6 +133,7 @@ PrecedenceRule rules[] = {
 Parser parser;
 Chunk* currentChunk = NULL;
 Compiler* currentCompiler = NULL;
+ClassCompiler* currentClass = NULL;
 
 static void errorAt(Token* token, const char* message) {
 	if (parser.panicMode) return;
@@ -261,6 +270,9 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 	
 	compiler->localCount = 0;
 	Local* local = &compiler->locals[compiler->localCount++];
+	local->scopeDepth = 0;
+	local->isCaptured = false;
+	
 	if (type != TYPE_FUNCTION) {
 		local->name.start = "this";
 		local->name.length = 4;
@@ -268,8 +280,6 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
 		local->name.start = "";
 		local->name.length = 0;
 	}
-
-	local->scopeDepth = 0;
 
 	currentCompiler = compiler;
 }
@@ -414,6 +424,7 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 
 	int local = resolveLocal(compiler->enclosing, name);
 	if (local != -1) {
+		compiler->enclosing->locals[local].isCaptured = true;
 		return addUpvalue(compiler, (uint8_t)local, true); 
 	}
 
@@ -463,6 +474,7 @@ static void addLocal(Token name) {
 	Local* local = &currentCompiler->locals[currentCompiler->localCount++];
 	local->name = name;
 	local->scopeDepth = -1;
+	local->isCaptured = false;
 }
 
 static void declareVariable() {
@@ -542,8 +554,14 @@ static void endScope() {
 
 	while (currentCompiler->localCount > 0 && 
 			currentCompiler->locals[currentCompiler->localCount - 1].scopeDepth > currentCompiler->currentScope) {
+		
+		if (currentCompiler->locals[currentCompiler->localCount - 1].isCaptured) {
+			emitByte(OP_CLOSE_UPVALUE);
+		} else {
+			emitByte(OP_POP);
+		}
+
 		currentCompiler->localCount--;
-		emitByte(OP_POP);
 	}
 }
 
@@ -768,10 +786,20 @@ static void dot(bool canAssign) {
 }
 
 static void this_(bool canAssign) {
-	if (currentCompiler->type != TYPE_METHOD && currentCompiler->type != TYPE_INITIALIZER) {
-		error("Can't use this outside a class");
+	if (currentClass == NULL) {
+		error("Can't use 'this' outside a class");
 	}
 
+	variable(false);
+}
+
+static void super_(bool canAssign) {
+	if (currentClass == NULL) {
+		error("Can't use 'super' outside a subclass");
+	} else if (!currentClass->hasSuperClass) {
+		error("Can't use 'super' on a class that has no superclass");
+	}
+	
 	variable(false);
 }
 
@@ -830,16 +858,50 @@ static void method() {
 	emitBytes(OP_METHOD, constant);	
 }
 
+static Token syntheticToken(const char* text) {
+	Token token;
+	
+	token.start = text;
+	token.length = (int)strlen(text);
+	
+	return token;	
+}
+
 static void classDeclaration() {
 	consume(TOKEN_IDENTIFIER, "Expect class name");
-
+	Token className = parser.previous;
 	uint8_t nameConstant = makeIdentifierConstant(parser.previous);
 	declareVariable();		
 
 	emitBytes(OP_CLASS, nameConstant); 
 	defineVariable(nameConstant);
+		
+	ClassCompiler classCompiler;
+	classCompiler.enclosing = currentClass;
+	classCompiler.name = parser.previous;
+	classCompiler.hasSuperClass = false;
+	currentClass = &classCompiler;
+
+	if (match(TOKEN_LESS)) {
+		// inheritance
+		consume(TOKEN_IDENTIFIER, "Expect super class name");
+		variable(false);
+
+		if (identifierEquals(&className, &parser.previous)) {
+			error("A Class can't inherit from itself");
+		}
+
+		beginScope();			
+
+		addLocal(syntheticToken("super"));
+		markInitialized();
 	
-	namedVariable(parser.previous, false);
+		namedVariable(className, false);
+		emitByte(OP_INHERIT);
+		classCompiler.hasSuperClass = true;
+	}
+
+	namedVariable(className, false);
 
 	consume(TOKEN_LEFT_BRACE, "Expect '{' befor class body");
 	// class body
@@ -848,6 +910,12 @@ static void classDeclaration() {
 	}	
 	consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body");
 	emitByte(OP_POP);
+
+	if (classCompiler.hasSuperClass) {
+		endScope();
+	}
+	
+	currentClass = currentClass->enclosing;
 }
 
 static void statement() {
@@ -916,7 +984,7 @@ static void declaration() {
  * funcDeclaration  -> "func" function
  * function         -> IDENTIFIER "(" parameters? ")" block 
  * parameters       -> IDENTIFER ("," IDENTIFIER)*
- * classDeclaration -> "class" IDENTIFIER "{" function* "}"
+ * classDeclaration -> "class" IDENTIFIER ("<" IDENTIFIER)? "{" function* "}"
  * statement        -> printStmt | exprStmt | block | ifStmt | whileStmt | forStmt | returnStmt
  * printStmt        -> "print" expression ";"
  * exprStmt         -> expression ";"
