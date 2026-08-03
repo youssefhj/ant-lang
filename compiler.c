@@ -793,14 +793,38 @@ static void this_(bool canAssign) {
 	variable(false);
 }
 
+static Token syntheticToken(const char* text) {
+	Token token;
+	
+	token.start = text;
+	token.length = (int)strlen(text);
+	
+	return token;	
+}
+
 static void super_(bool canAssign) {
 	if (currentClass == NULL) {
 		error("Can't use 'super' outside a subclass");
 	} else if (!currentClass->hasSuperClass) {
 		error("Can't use 'super' on a class that has no superclass");
 	}
+
+	consume(TOKEN_DOT, "Expect '.' after super");
+	consume(TOKEN_IDENTIFIER, "Expect superclass method name");
+	uint8_t nameConstant = makeIdentifierConstant(parser.previous);
 	
-	variable(false);
+	namedVariable(syntheticToken("this"), false);
+	if (match(TOKEN_LEFT_PAREN)) {
+		uint8_t argCount = argumentList();
+		
+		namedVariable(syntheticToken("super"), false);
+		
+		emitBytes(OP_SUPER_INVOKE, nameConstant);
+		emitByte(argCount);
+	} else {
+		namedVariable(syntheticToken("super"), false);
+		emitBytes(OP_GET_SUPER, nameConstant);	
+	}
 }
 
 static void function(FunctionType type) {
@@ -856,15 +880,6 @@ static void method() {
 
 	function(type);
 	emitBytes(OP_METHOD, constant);	
-}
-
-static Token syntheticToken(const char* text) {
-	Token token;
-	
-	token.start = text;
-	token.length = (int)strlen(text);
-	
-	return token;	
 }
 
 static void classDeclaration() {
@@ -1004,7 +1019,7 @@ static void declaration() {
  * unary            -> ("!" | "-") unary | call
  * call             -> primary ("(" arguments? ")" | "." IDENTIFIER)*
  * arguments        -> expression ("," expression)*
- * primary          -> "true" | "false" | "nil" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
+ * primary          -> "true" | "false" | "nil" | "this" | "super" | IDENTIFIER | STRING | NUMBER | "(" expression ")"
  */
 ObjFunction* compile(const char* source) {
 	initScanner(source);
