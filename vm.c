@@ -140,7 +140,7 @@ static bool callValue(Value callee, uint8_t argCount) {
 				return true;
 			}
 			case OBJ_CLASS: {
-				ObjClass* klass = AS_CLASS(peek(argCount));
+				ObjClass* klass = AS_CLASS(callee);
 				vm.topStack[-argCount - 1] = OBJ_VAL(newInstance(klass));
 
 				Value initializer;
@@ -507,6 +507,28 @@ static InterpretResult run() {
 				ObjClass* subclass = AS_CLASS(peek(0));
 				tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
 				pop();
+				break;
+			}
+			case OP_SUPER_INVOKE: {
+				ObjString* method = READ_STRING();
+				int argCount = READ_BYTE();
+				ObjClass* superclass = AS_CLASS(pop());
+
+				if (!invokeFromClass(superclass, method, argCount)) {
+					return INTERPRET_RUNTIME_ERROR;
+				}
+
+				frame = &vm.frames[vm.frameCount - 1];
+				break;
+			}
+			case OP_GET_SUPER: {
+				ObjString* name = READ_STRING();
+				ObjClass* superclass = AS_CLASS(pop());
+				
+				if (!boundMethod(superclass, name)) {
+					return INTERPRET_RUNTIME_ERROR;
+				}
+
 				break;
 			}
 		}	
