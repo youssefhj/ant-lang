@@ -1,4 +1,5 @@
 // Class declaration
+// superclass
 class Person {
 	// Constructor
 	init(name, age) {
@@ -17,8 +18,19 @@ class Person {
 	}
 }
 
+// Inheritance
+// subclass
+class AntDeveloper < Person {
+	eat(something) {
+		// 'super' is a special variable
+		//         that refrence to the super class
+		super.eat(something);
+		print "while coding :)";
+	}
+}
+
 // Object
-var p = Person("Test", 20); // Instantiation
+var p = AntDeveloper("Dev", 20); // Instantiation
 
 // Getting properties
 print "name is: " + p.name;
