@@ -1,0 +1,32 @@
+class Cinema {
+	init() {
+		this.a = 1;
+		this.c = 1;
+		this.d = 1;
+		this.h = 1;
+		this.r = 1;
+		this.s = 1;	
+	}
+
+	action() {return this.a;}
+	comedy() {return this.c;}
+	drama() {return this.d;}
+	horror() {return this.h;}
+	romance() {return this.r;}
+	scienceFiction() {return this.s;}
+}
+
+var c = Cinema();
+var sum = 0;
+var start = clock();
+while (sum < 100000000) {	
+	sum = sum + c.action()
+		  + c.comedy()
+		  + c.drama()
+		  + c.horror()
+		  + c.romance()
+		  + c.scienceFiction();
+}
+
+print clock() - start;
+print sum;
