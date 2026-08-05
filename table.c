@@ -4,10 +4,10 @@
 #include "table.h"
 #include "memory.h"
 
-#define MAX_LOAD_FACTOR 0.70
+#define TABLE_MAX_LOAD_FACTOR 0.70
 
 void initTable(Table* table) {
-	table->capacity = 0;
+	table->capacity = -1;
 	table->count = 0;
 	table->entries = NULL;
 }
@@ -19,8 +19,11 @@ void freeTable(Table* table) {
 
 static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
 	if (entries == NULL) return NULL;
-
-	int index = key->hash % capacity;
+	
+	// After profiling this is the 'Hot Spot'
+	// uint32_t index = key->hash % capacity
+	// Optimization for better performance
+	uint32_t index = key->hash & capacity;
 	
 	Entry* entry = NULL;
 	Entry* tombstone = NULL;
@@ -39,23 +42,22 @@ static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
 			return entry;
 		}
 
-		index = (index + 1) % capacity;
+		index = (index + 1) & capacity;
 	}
 
 	return NULL;
-
 }
 
 static void adjustCapacity(Table* table, int capacity) {
-	Entry* entries = ALLOCATE(Entry, capacity);
+	Entry* entries = ALLOCATE(Entry, capacity + 1);
 
-	for (int idx = 0; idx < capacity; idx++) {
+	for (int idx = 0; idx <= capacity; idx++) {
 		entries[idx].key = NULL;
 		entries[idx].value = NIL_VAL;
 	}
 
 	table->count = 0;
-	for (int idx = 0; idx < table->capacity; idx++) {
+	for (int idx = 0; idx <= table->capacity; idx++) {
 		Entry* entry = &table->entries[idx];
 		if (entry->key == NULL)  continue;
 		
@@ -74,8 +76,9 @@ static void adjustCapacity(Table* table, int capacity) {
 bool tableSet(Table* table, ObjString* key, Value value) {
 	if (table == NULL) return false;
 
-	if (table->count + 1 > table->capacity * MAX_LOAD_FACTOR) {
-		adjustCapacity(table, GROW_CAPACITY(table->capacity));
+	if (table->count + 1 > (table->capacity + 1) * TABLE_MAX_LOAD_FACTOR) {
+		int capacity = GROW_CAPACITY(table->capacity + 1) - 1;
+		adjustCapacity(table, capacity);
 	}
 	
 	Entry* entry = findEntry(table->entries, table->capacity, key);
@@ -116,7 +119,7 @@ bool tableDelete(Table* table, ObjString* key) {
 }
 
 void tableAddAll(Table* from, Table* to) {
-	for (int i = 0; i < from->capacity; i++) {
+	for (int i = 0; i <= from->capacity; i++) {
 		Entry* entry = &from->entries[i];
 		if (entry->key != NULL) {
 			tableSet(to, entry->key, entry->value);
@@ -128,7 +131,7 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
 	if (table == NULL || table->count == 0) return NULL;
 	
 	int capacity = table->capacity;
-	int index = hash % capacity;
+	uint32_t index = hash & capacity;
 
 	Entry* entry = NULL;
 
@@ -142,8 +145,7 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
 			return entry->key;
 		}
 
-		index = (index + 1) % capacity;
-
+		index = (index + 1) & capacity;
 	}
 
 	return NULL;
