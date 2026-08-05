@@ -4,9 +4,9 @@
 #include "common.h"
 
 #define ALLOCATE(type, size)            ((type*)reallocate(NULL, sizeof(type)*(size)))
-#define GROW_CAPACITY(oldCapacity)	((oldCapacity) < 8 ? 8 : ((oldCapacity) * 2))
-#define GROW_ARRAY(type, ptr, newSize)	((type*)reallocate(ptr, sizeof(type)*(newSize)))
-#define FREE_ARRAY(type, ptr)		((type*)reallocate(ptr, 0))
+#define GROW_CAPACITY(oldCapacity)      ((oldCapacity) < 8 ? 8 : ((oldCapacity) * 2))
+#define GROW_ARRAY(type, ptr, newSize)  ((type*)reallocate(ptr, sizeof(type)*(newSize)))
+#define FREE_ARRAY(type, ptr)           ((type*)reallocate(ptr, 0))
 #define FREE(type, ptr)                 ((type*)reallocate(ptr, 0))
 
 void* reallocate(void* ptr, size_t newSize);
