@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -g
+CFLAGS = -Wall -pg
 
 BUILD_DIR = build
 TARGET = ant
