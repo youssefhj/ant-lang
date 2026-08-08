@@ -18,9 +18,14 @@ static Value clockNative(int argCount, Value* args) {
 
 static void defineNative(const char* name, NativeFn function) {
 	ObjString* key = copyString(name, (int)strlen(name));
-	ObjNative* native = newNative(function);
+	push(OBJ_VAL(key));
 	
+	ObjNative* native = newNative(function);
+	push(OBJ_VAL(native));
+
 	tableSet(&vm.globals, key, OBJ_VAL(native));
+	pop();
+	pop();
 }
 
 static void resetStack() {
@@ -32,6 +37,11 @@ static void resetStack() {
 
 void initVM() {
 	resetStack();
+	vm.grayCount = 0;
+	vm.grayCapacity = 0;
+	vm.grayStack = NULL;
+	vm.bytesAllocated = 0;
+	vm.nextGC = 1024 * 1024;
 	initTable(&vm.globals);
 	initTable(&vm.strings);
 	vm.initString = copyString("init", 4);
@@ -72,12 +82,12 @@ static void runtimeError(const char* format, ...) {
 	resetStack();
 }
 
-static void push(Value value) {
+void push(Value value) {
 	vm.topStack++;
 	vm.topStack[-1] = value;
 }
 
-static Value pop() {
+Value pop() {
 	vm.topStack--;
 	return *vm.topStack;
 }
@@ -547,8 +557,10 @@ InterpretResult interpret(const char* source) {
 	if (function == NULL) {
 		return INTERPRET_COMPILETIME_ERROR;
 	}
-
+	
+	push(OBJ_VAL(function));
 	ObjClosure* closure = newClosure(function);
+	pop();
 	push(OBJ_VAL(closure));
 	callValue(OBJ_VAL(closure), 0);
 
