@@ -13,8 +13,9 @@ void initValueArray(ValueArray* array) {
 int writeValueArray(ValueArray* array, Value value) {
 	if (array->count + 1 > array->capacity) {
 		// Allocating some extra memory
-		array->capacity = GROW_CAPACITY(array->capacity);
-		array->values = GROW_ARRAY(Value, array->values, array->capacity);
+		int oldCapacity = array->capacity;
+		array->capacity = GROW_CAPACITY(oldCapacity);
+		array->values = GROW_ARRAY(Value, array->values, oldCapacity, array->capacity);
 	}
 
 	array->values[array->count++] = value;
@@ -63,6 +64,6 @@ bool valuesEqual(Value a, Value b) {
 }
 
 void freeValueArray(ValueArray* array) {
-	FREE_ARRAY(Value, array->values);
+	FREE_ARRAY(Value, array->values, array->capacity);
 	initValueArray(array);
 }
