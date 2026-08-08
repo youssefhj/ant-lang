@@ -6,5 +6,6 @@
 #include "object.h"
 
 ObjFunction* compile(const char* source);
+void markCompilerRoots();
 
 #endif // ANT_COMPILER_H
