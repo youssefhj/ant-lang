@@ -13,7 +13,7 @@ void initTable(Table* table) {
 }
 
 void freeTable(Table* table) {
-	FREE_ARRAY(Entry, table->entries);
+	FREE_ARRAY(Entry, table->entries, table->capacity + 1);
 	initTable(table);
 }
 
@@ -68,7 +68,7 @@ static void adjustCapacity(Table* table, int capacity) {
 		table->count++;
 	}
 
-	FREE_ARRAY(Entry, table->entries);
+	FREE_ARRAY(Entry, table->entries, table->capacity + 1);
 	table->capacity = capacity;
 	table->entries = entries;
 }
@@ -149,4 +149,22 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
 	}
 
 	return NULL;
+}
+
+void markTable(Table* table) {
+	for (int i = 0; i <= table->capacity; i++) {
+		Entry* entry = &table->entries[i];
+		markObject((Obj*)entry->key);
+		markValue(entry->value);
+	}
+}
+
+void tableRemoveWhite(Table* table) {
+	for (int i = 0; i <= table->capacity; i++) {
+		Entry* entry = &table->entries[i];
+
+		if (entry->key != NULL && !entry->key->obj.isMarked) {
+			tableDelete(table, entry->key);
+		}
+	}
 }
