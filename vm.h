@@ -32,12 +32,19 @@ typedef struct {
 	ObjString* initString;
 	Table globals;
 	Table strings;
+	int grayCount;
+	int grayCapacity;
+	Obj** grayStack;
+	size_t bytesAllocated;
+	size_t nextGC;
 } VM;
 
 
 void initVM();
 void freeVM();
 InterpretResult interpret(const char* source);
+void push(Value value);
+Value pop();
 
 
 #endif // ANT_VM_H
