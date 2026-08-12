@@ -1,8 +1,8 @@
 #ifndef ANT_CHUNK_H
 #define ANT_CHUNK_H
 
-#include "common.h"
-#include "value.h"
+#include "../../common.h"
+#include "../value/value.h"
 
 typedef enum {
 	OP_CONSTANT,
