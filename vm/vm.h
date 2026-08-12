@@ -1,11 +1,11 @@
 #ifndef ANT_VM_H
 #define ANT_VM_H
 
-#include "common.h"
-#include "chunk.h"
-#include "value.h"
-#include "object.h"
-#include "table.h"
+#include "../common.h"
+#include "./chunk/chunk.h"
+#include "./value/value.h"
+#include "./value/object/object.h"
+#include "./hash-table/table.h"
 
 #define FRAMES_MAX 64
 #define STACK_MAX_SIZE (FRAMES_MAX * 1024)

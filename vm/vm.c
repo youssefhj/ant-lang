@@ -4,11 +4,11 @@
 #include <time.h>
 
 #include "vm.h"
-#include "common.h"
-#include "compiler.h"
-#include "object.h"
-#include "debug.h"
-#include "memory.h"
+#include "../common.h"
+#include "../compiler/compiler.h"
+#include "./value/object/object.h"
+#include "./disassembler/debug.h"
+#include "./memory/memory.h"
 
 VM vm;
 
