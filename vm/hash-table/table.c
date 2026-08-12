@@ -1,8 +1,8 @@
 #include <string.h>
 
-#include "object.h"
+#include "../value/object/object.h"
 #include "table.h"
-#include "memory.h"
+#include "../memory/memory.h"
 
 #define TABLE_MAX_LOAD_FACTOR 0.70
 

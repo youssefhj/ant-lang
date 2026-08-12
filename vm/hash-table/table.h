@@ -1,8 +1,8 @@
 #ifndef ANT_TABLE_H
 #define ANT_TABLE_H
 
-#include "common.h"
-#include "value.h"
+#include "../../common.h"
+#include "../value/value.h"
 
 typedef struct {
 	ObjString* key;
