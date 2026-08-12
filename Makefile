@@ -4,7 +4,17 @@ CFLAGS = #-Wall -pg
 BUILD_DIR = build
 TARGET = ant
 
-SRCS = $(wildcard *.c)
+SRCS = main.c \
+       compiler/compiler.c \
+       compiler/scanner/scanner.c \
+       vm/vm.c \
+       vm/chunk/chunk.c \
+       vm/disassembler/debug.c \
+       vm/memory/memory.c \
+       vm/hash-table/table.c \
+       vm/value/value.c \
+       vm/value/object/object.c \
+
 OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 
 .PHONY: all clean
@@ -12,9 +22,10 @@ OBJS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $@
+	$(CC) $(CFLAGS) $^ -o $@
 
-$(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR):
