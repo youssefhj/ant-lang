@@ -1,7 +1,7 @@
 #ifndef ANT_MEMORY_H
 #define ANT_MEMORY_H
 
-#include "common.h"
+#include "../../common.h"
 
 #define ALLOCATE(type, size)                           ((type*)reallocate(NULL, 0, sizeof(type)*(size)))
 #define GROW_CAPACITY(oldCapacity)                     ((oldCapacity) < 8 ? 8 : ((oldCapacity) * 2))
