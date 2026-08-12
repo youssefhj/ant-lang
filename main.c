@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "vm.h"
+#include "./vm/vm.h"
 
 
 void runFile(const char* filename) {
