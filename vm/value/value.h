@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "common.h"
+#include "../../common.h"
 
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
