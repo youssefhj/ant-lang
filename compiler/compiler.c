@@ -3,14 +3,14 @@
 #include <string.h>
 
 #include "compiler.h"
-#include "common.h"
-#include "scanner.h"
-#include "chunk.h"
-#include "object.h"
-#include "memory.h"
+#include "../common.h"
+#include "./scanner/scanner.h"
+#include "../vm/chunk/chunk.h"
+#include "../vm/value/object/object.h"
+#include "../vm/memory/memory.h"
 
 #ifdef DEBUG_PRINT_CODE
-#include "debug.h"
+#include "../vm/disassembler/debug.h"
 #endif
 
 typedef enum {

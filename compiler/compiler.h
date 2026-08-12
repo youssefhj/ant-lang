@@ -1,9 +1,9 @@
 #ifndef ANT_COMPILER_H
 #define ANT_COMPILER_H
 
-#include "common.h"
-#include "chunk.h"
-#include "object.h"
+#include "../common.h"
+#include "../vm/chunk/chunk.h"
+#include "../vm/value/object/object.h"
 
 ObjFunction* compile(const char* source);
 void markCompilerRoots();
