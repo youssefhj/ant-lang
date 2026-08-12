@@ -1,7 +1,7 @@
 #ifndef ANT_DEBUG_H
 #define ANT_DEBUG_H
 
-#include "chunk.h"
+#include "../chunk/chunk.h"
 
 int disassembleInstruction(Chunk* chunk, int offset);
 void disassemble(Chunk* chunk, const char* title);

@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 #include "debug.h"
-#include "object.h"
+#include "../value/object/object.h"
 
 
 static int constantInstruction(const char* opcode, Chunk* chunk, int offset) {
