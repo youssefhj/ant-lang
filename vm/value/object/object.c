@@ -2,9 +2,9 @@
 #include <string.h>
 
 #include "object.h"
-#include "vm.h"
-#include "memory.h"
-#include "vm.h"
+#include "../../vm.h"
+#include "../../memory/memory.h"
+#include "../../vm.h"
 
 #define ALLOCATE_OBJ(type, objType)          ((type*)allocateObject(sizeof(type), objType))
 
