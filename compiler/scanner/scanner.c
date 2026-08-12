@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "common.h"
+#include "../../common.h"
 #include "scanner.h"
 
 
